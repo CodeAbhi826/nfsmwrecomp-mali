@@ -2168,6 +2168,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
      * This method is called by SDL using JNI.
      */
     public static boolean showFileDialog(String[] filters, boolean allowMultiple,
+        boolean isSave, int requestCode) {
+        return showFileDialog(filters, allowMultiple, isSave ? SDL_FILEDIALOG_SAVEFILE : SDL_FILEDIALOG_OPENFILE, null, requestCode);
+    }
+
+    public static boolean showFileDialog(String[] filters, boolean allowMultiple,
         int type, String initialPath, int requestCode) {
         if (mSingleton == null) {
             return false;
