@@ -143,10 +143,10 @@ public final class TouchControlsView extends View {
     private void createControls() {
         final int grey = 0xFF18232E;
         // Triggers and Bumpers (Top): Pill shape
-        add(new Control("lt", PILL, "LT", "", 0, TRIGGER_LEFT, grey, .07f, .09f, .11f, true));
-        add(new Control("lb", PILL, "LB", "", LB, TRIGGER_NONE, grey, .20f, .09f, .11f, true));
-        add(new Control("rb", PILL, "RB", "", RB, TRIGGER_NONE, grey, .81f, .09f, .11f, true));
-        add(new Control("rt", PILL, "RT", "", 0, TRIGGER_RIGHT, grey, .93f, .09f, .11f, true));
+        add(new Control("lt", PILL, "LT", "", 0, TRIGGER_LEFT, grey, .07f, .13f, .10f, true));
+        add(new Control("lb", PILL, "LB", "", LB, TRIGGER_NONE, grey, .20f, .13f, .10f, true));
+        add(new Control("rb", PILL, "RB", "", RB, TRIGGER_NONE, grey, .81f, .13f, .10f, true));
+        add(new Control("rt", PILL, "RT", "", 0, TRIGGER_RIGHT, grey, .93f, .13f, .10f, true));
 
         // Thumbstick Clicks (L3 / R3)
         add(new Control("l3", BUTTON, "L3", "", LTHUMB, TRIGGER_NONE, grey, .07f, .48f, .11f, true));
