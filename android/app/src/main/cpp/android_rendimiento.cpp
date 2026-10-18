@@ -22,8 +22,8 @@
 #include <rex/logging.h>
 
 REXCVAR_DEFINE_BOOL(nfsmw_android_nucleos_grandes, true, "NFSMW",
-                    "Android: el juego solo usa los nucleos rapidos (reloj maximo de al menos el 70 % del mas "
-                    "rapido); false = los que decida el sistema")
+                    "Android: restrict game threads to high-performance cores (max clock at least 70% of fastest core); "
+                    "false = system default")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 namespace {
@@ -51,7 +51,7 @@ extern "C" void nfsmw_android_nucleos_grandes_aplicar() {
     maximo = std::max(maximo, relojes[size_t(cpu)]);
   }
   if (maximo <= 0) {
-    REXLOG_INFO("[android] no se pueden leer los relojes de los nucleos: afinidad sin cambios");
+    REXLOG_INFO("[android] cannot read CPU core frequencies: affinity unchanged");
     return;
   }
   cpu_set_t mascara;
@@ -66,7 +66,7 @@ extern "C" void nfsmw_android_nucleos_grandes_aplicar() {
     }
   }
   if (elegidos == total || elegidos < 2) {
-    REXLOG_INFO("[android] {} nucleos sin grupo lento: afinidad sin cambios", total);
+    REXLOG_INFO("[android] {} CPU cores without slow cluster: affinity unchanged", total);
     return;
   }
   // Every thread that already exists (the SDL thread, the UI thread, the logger); the ones created later
@@ -79,6 +79,6 @@ extern "C" void nfsmw_android_nucleos_grandes_aplicar() {
       ++hilos;
     }
   }
-  REXLOG_INFO("[android] juego en los nucleos {} de {} (reloj >= 70 % de {} MHz); {} hilos movidos", lista,
+  REXLOG_INFO("[android] game running on cores {} of {} (clock >= 70% of {} MHz); {} threads migrated", lista,
               total, maximo / 1000, hilos);
 }

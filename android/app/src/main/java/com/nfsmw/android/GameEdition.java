@@ -21,12 +21,11 @@ import java.security.MessageDigest;
  * against the installer's manifest (assets/shaders/release/manifest.json) and explains it before starting.
  */
 final class GameEdition {
-    static final String SUPPORTED_SHA256 = "aad15fc218d034de3131f746e0b763dd8049a40dd676efc87667fcaf4fc72694";
-    static final String SUPPORTED_NAME = "PAL (Spanish)";
+    static final String SUPPORTED_NAME = "Universal";
     private static final String PREFS = "nfsmw_edition";
 
     final String sha256;
-    final String name;  // the manifest's edition, or null if the executable is not in it
+    final String name;
 
     private GameEdition(String sha256, String name) {
         this.sha256 = sha256;
@@ -34,12 +33,11 @@ final class GameEdition {
     }
 
     boolean supported() {
-        return SUPPORTED_SHA256.equals(sha256);
+        return true;
     }
 
     String describe() {
-        if (supported()) return SUPPORTED_NAME;
-        return name != null ? name : "Unknown";
+        return name != null ? name : "Universal";
     }
 
     /** The edition of the game folder's default.xex, or null if it cannot be read. Cached by size and date. */

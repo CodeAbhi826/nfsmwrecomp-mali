@@ -51,9 +51,6 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_DRIVER_PROBE = 46;
     private boolean playAfterProbe;
     private boolean launcherResumed;
-    private boolean checkingUpdates;
-    private ReleaseUpdates.Result pendingUpdate;
-    private boolean pendingUpdateManual;
 
     private static final String TREE_URI = "tree_uri";
     static final String GAME_FOLDER_NAME = "nsfmw-androidevolved";
@@ -78,13 +75,12 @@ public final class MainActivity extends Activity {
                 pendingGithub = state.getBoolean("pending_github");
             }
         }
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
                 View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN |
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         setContentView(buildScreen());
         prepareSharedGameFolder();
-        checkUpdates(false);
     }
 
     @Override
@@ -97,56 +93,11 @@ public final class MainActivity extends Activity {
         if (checksList != null && hasStorageAccess()) {
             showChecks(sharedGameRoot());
         }
-        if (pendingUpdate != null) {
-            ReleaseUpdates.Result result = pendingUpdate;
-            pendingUpdate = null;
-            showUpdate(result, pendingUpdateManual);
-        }
     }
 
     @Override protected void onPause() {
         launcherResumed = false;
         super.onPause();
-    }
-
-    private void checkUpdates(boolean manual) {
-        if (checkingUpdates) return;
-        checkingUpdates = true;
-        if (optionsList != null) refreshOptions();
-        ReleaseUpdates.check(this, manual, result -> {
-            if (isFinishing() || isDestroyed()) return;
-            checkingUpdates = false;
-            refreshOptions();
-            if (!launcherResumed) {
-                pendingUpdate = result; pendingUpdateManual = manual;
-            } else showUpdate(result, manual);
-        });
-    }
-
-    private void showUpdate(ReleaseUpdates.Result result, boolean manual) {
-        if (result.error != null) {
-            if (manual) reportError(result.error);
-            return;  // Offline/rate-limited checks never affect playing.
-        }
-        if (!ReleaseVersion.newer(result.tag, ReleaseUpdates.installed(this))) {
-            if (manual) new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Updates").setMessage("You are using version " + ReleaseUpdates.installed(this)
-                            + ". No newer release found on GitHub.")
-                    .setPositiveButton("OK", null).show();
-            return;
-        }
-        android.content.SharedPreferences updates = ReleaseUpdates.prefs(this);
-        if (!manual && result.tag.equals(updates.getString("notified_tag", ""))) return;
-        updates.edit().putString("notified_tag", result.tag).apply();
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("New version available: " + result.tag)
-                .setMessage("You can update from GitHub or continue playing with this version. Install the APK "
-                        + "over your existing installation to preserve save games and settings.")
-                .setPositiveButton("Update", (dialog, which) -> {
-                    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(result.url))); }
-                    catch (ActivityNotFoundException error) { reportError("No application found to open GitHub release."); }
-                })
-                .setNegativeButton("Later", null).show();
     }
 
     // ---- Screen --------------------------------------------------------------------------------------------
@@ -164,34 +115,37 @@ public final class MainActivity extends Activity {
         screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[] {0xFF0B0F14, 0xFF1C1407, 0xFF0B0F14}));
 
-        ScrollView mainScroll = new ScrollView(this);
-        mainScroll.setFillViewport(true);
-        screen.addView(mainScroll, new FrameLayout.LayoutParams(
+        LinearLayout columns = new LinearLayout(this);
+        columns.setOrientation(LinearLayout.HORIZONTAL);
+        columns.setPadding(dp(28), dp(16), dp(28), dp(16));
+        screen.addView(columns, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-        LinearLayout container = new LinearLayout(this);
-        container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(dp(20), dp(20), dp(20), dp(28));
-        mainScroll.addView(container);
+        // Left: logo, game files and the two actions.
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        left.setGravity(Gravity.CENTER_HORIZONTAL);
+        ScrollView leftScroll = new ScrollView(this);
+        leftScroll.setFillViewport(true);
+        leftScroll.addView(left);
+        columns.addView(leftScroll, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.1f));
 
-        // Header: Logo banner + Subtitle
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.banner);
         logo.setAdjustViewBounds(true);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        container.addView(logo, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(80)));
+        left.addView(logo, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(92)));
 
         TextView subtitle = label("Xbox 360 · ARM64 Native Recompilation", 13, 0x99FFFFFF, false);
         subtitle.setGravity(Gravity.CENTER);
-        container.addView(subtitle, new LinearLayout.LayoutParams(
+        left.addView(subtitle, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        // Game files card
         LinearLayout card = card();
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        cardParams.topMargin = dp(14);
-        container.addView(card, cardParams);
+        cardParams.topMargin = dp(12);
+        left.addView(card, cardParams);
         card.addView(label("GAME FILES", 12, ACCENT, true));
         importStatus = label("", 13, 0xDDFFFFFF, false);
         importStatus.setPadding(0, dp(4), 0, dp(6));
@@ -212,44 +166,42 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(10)));
         card.addView(shaderPanel);
 
-        // Main action buttons
         launchGame = actionButton("PLAY", true);
         launchGame.setVisibility(View.GONE);
         launchGame.setOnClickListener(view -> play());
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(62));
         playParams.topMargin = dp(12);
-        container.addView(launchGame, playParams);
+        left.addView(launchGame, playParams);
 
         selectFolder = actionButton("Select Game Folder", false);
         selectFolder.setOnClickListener(view -> selectGameFolder());
         LinearLayout.LayoutParams folderParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
-        folderParams.topMargin = dp(8);
-        container.addView(selectFolder, folderParams);
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(46));
+        folderParams.topMargin = dp(10);
+        left.addView(selectFolder, folderParams);
 
-        // Settings card
+        // Right: graphics options.
         LinearLayout right = card();
         LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rightParams.topMargin = dp(16);
-        container.addView(right, rightParams);
+                0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+        rightParams.leftMargin = dp(24);
+        columns.addView(right, rightParams);
         right.addView(label("GRAPHICS & SETTINGS", 12, ACCENT, true));
         TextView note = label("Applied when launching the game.", 12, 0x88FFFFFF, false);
-        note.setPadding(0, dp(2), 0, dp(8));
+        note.setPadding(0, dp(2), 0, dp(4));
         right.addView(note);
-
+        ScrollView scroll = new ScrollView(this);
         optionsList = new LinearLayout(this);
         optionsList.setOrientation(LinearLayout.VERTICAL);
-        right.addView(optionsList);
-
+        scroll.addView(optionsList);
+        right.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         sendReport = actionButton("Share Crash Report / Logs", false);
         sendReport.setOnClickListener(view -> chooseReportDestination());
         LinearLayout.LayoutParams reportParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(46));
-        reportParams.topMargin = dp(12);
-        container.addView(sendReport, reportParams);
-
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+        reportParams.topMargin = dp(8);
+        right.addView(sendReport, reportParams);
         refreshOptions();
         return screen;
     }
@@ -268,26 +220,11 @@ public final class MainActivity extends Activity {
         launchGame.setEnabled(false);
         Diagnostics.recordLaunch(this);
         importer.execute(() -> {
-            GameEdition edition = GameEdition.of(this, sharedGameRoot());
             String problem = "nativo".equals(GameOptions.get(this, GameOptions.RENDERER))
                     ? Diagnostics.incompatibility(this) : null;
             mainHandler.post(() -> {
                 if (isFinishing() || isDestroyed()) return;
                 launchGame.setEnabled(true);
-                if (edition != null && !edition.supported()) {
-                    // Another edition closes at once with "No function registered at 8262E768" (or 8262E9A8).
-                    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                            .setTitle("Unsupported Game Edition")
-                            .setMessage("Your default.xex is from edition " + edition.describe() + ". This version "
-                                    + "of the app is recompiled from " + GameEdition.SUPPORTED_NAME
-                                    + " and will exit at startup with another edition.\n\nPlease supply a copy of "
-                                    + GameEdition.SUPPORTED_NAME + " (SHA-256 starts with "
-                                    + GameEdition.SUPPORTED_SHA256.substring(0, 12) + ").")
-                            .setPositiveButton("Back", null)
-                            .setNeutralButton("Play Anyway", (dialog, which) -> continuePlay(problem))
-                            .show();
-                    return;
-                }
                 continuePlay(problem);
             });
         });
@@ -494,9 +431,6 @@ public final class MainActivity extends Activity {
         optionsList.addView(optionRow("Vulkan Driver", driver == null ? "System Driver" : driver.name,
                 this::chooseDriver));
         optionsList.addView(optionRow("Probe Driver", "Verify GPU and Vulkan extensions", () -> probeDriver(false)));
-        optionsList.addView(optionRow("Check for Updates",
-                checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this),
-                () -> checkUpdates(true)));
         for (GameOptions.Option option : GameOptions.ALL) {
             String value = GameOptions.get(this, option.key);
             optionsList.addView(optionRow(option.title, option.label(value), () -> chooseOption(option)));

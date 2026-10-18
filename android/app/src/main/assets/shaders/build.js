@@ -30,7 +30,7 @@ const sha256 = async (bytes) => hex(await crypto.subtle.digest('SHA-256', bytes)
 async function fetchBytes(url) {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`no se pudo leer ${url} (${response.status})`);
+    throw new Error(`Could not read ${url} (${response.status})`);
   }
   return new Uint8Array(await response.arrayBuffer());
 }
@@ -39,7 +39,7 @@ async function fetchBytes(url) {
 async function scanFile(scanner, file, onBytes) {
   const response = await fetch(GAME + file.path.split('/').map(encodeURIComponent).join('/'));
   if (!response.ok || !response.body) {
-    throw new Error(`no se pudo leer ${file.path}`);
+    throw new Error(`Could not read ${file.path}`);
   }
   scanner.beginFile(file.path, file.size);
   const reader = response.body.getReader();
@@ -71,14 +71,14 @@ async function scanFile(scanner, file, onBytes) {
     }
   }
   if (seen !== file.size) {
-    throw new Error(`${file.path}: se leyeron ${seen} de ${file.size} bytes`);
+    throw new Error(`${file.path}: read ${seen} of ${file.size} bytes`);
   }
   flush(true);
 }
 
 async function main() {
-  setLanguage('es');
-  progress(0, 'Cargando el compilador de shaders…');
+  setLanguage('en');
+  progress(0, 'Loading shader compiler…');
   const quiet = () => ({ print: () => {}, printErr: () => {} });
   const [hlsl, dxc, pack, lzx] = await Promise.all([
     createHlslModule(quiet()), createDxcModule(quiet()), createPackModule(quiet()), createLzxModule(quiet()),
@@ -86,14 +86,14 @@ async function main() {
   const manifest = JSON.parse(new TextDecoder().decode(await fetchBytes('./release/manifest.json')));
   const shaderCommon = await fetchBytes('./shader_common.h');
 
-  progress(0.02, 'Leyendo default.xex…');
+  progress(0.02, 'Reading default.xex…');
   const xex = await fetchBytes(GAME + 'default.xex');
   const xexHash = await sha256(xex);
   const build = manifest.builds.find((b) => b.xex_sha256 === xexHash);
   const { image } = await readXexImage(xex, async (compressed, bits, size) => {
     lzx.FS.writeFile('/i.lzx', compressed);
     if (lzx.callMain(['/i.lzx', '/i.bin', String(bits), String(size)])) {
-      throw new Error('fallo al descomprimir default.xex');
+      throw new Error('Failed to decompress default.xex');
     }
     return lzx.FS.readFile('/i.bin');
   });
@@ -108,11 +108,11 @@ async function main() {
   for (const f of files) {
     await scanFile(disc, f, (n) => {
       read += n;
-      progress(0.03 + 0.37 * (read / total), `Buscando shaders en ${f.path}…`);
+      progress(0.03 + 0.37 * (read / total), `Scanning shaders in ${f.path}…`);
     });
   }
   const containers = [...disc.found, ...executable.found];
-  progress(0.4, `Encontrados ${containers.length} shaders. Traduciendo…`);
+  progress(0.4, `Found ${containers.length} shaders. Compiling…`);
 
   const blurSha = build ? build.blur_container_sha256 : manifest.builds[0].blur_container_sha256;
   let blurShader = null;
@@ -123,12 +123,12 @@ async function main() {
     }
   }
   if (!blurShader) {
-    throw new Error('no se encontró el shader de composición: ¿es una copia completa del juego?');
+    throw new Error('Composition shader not found: please ensure all game data files are present.');
   }
 
   let compiled = 0;
   const library = await buildShaderLibrary(containers, { hlsl, dxc, pack }, shaderCommon, (text) => {
-    if (text.startsWith('Compilados')) {
+    if (text.startsWith('Compiled') || text.startsWith('Compilados')) {
       compiled += 25;
       progress(0.45 + 0.53 * (compiled / containers.length), text);
     } else {
@@ -136,13 +136,13 @@ async function main() {
     }
   }, blurShader);
 
-  progress(0.99, 'Comprobando la biblioteca…');
+  progress(0.99, 'Verifying shader library…');
   const libraryHash = await sha256(library);
   // Android's library differs from the Switch one on purpose: its shader_common.h has no 64-bit pointer path
   // (Vulkan 1.1 and drivers without shaderInt64), so it is checked against its own SHA-256 per executable.
   const expected = ANDROID_LIBRARIES[xexHash];
   if (expected && libraryHash !== expected) {
-    throw new Error(`la biblioteca no coincide con la esperada (${libraryHash.slice(0, 12)}…)`);
+    throw new Error(`Shader library mismatch (${libraryHash.slice(0, 12)}…)`);
   }
   // Base64 in pieces, so no single string conversion of 3 MB of bytes has to fit in the call stack.
   let text = '';

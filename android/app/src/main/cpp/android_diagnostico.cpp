@@ -24,13 +24,13 @@ std::string Probe(const char* hooks, const char* temp, const char* directory, co
     ~Loader() { if (handle) dlclose(handle); }
   } loader{rex_android_open_vulkan(hooks, temp, directory, library)};
   if (!loader.handle)
-    return "{\"driverLoadFailed\":true,\"probeError\":\"No se pudo abrir el driver seleccionado\"}";
+    return "{\"driverLoadFailed\":true,\"probeError\":\"Could not open selected driver\"}";
   auto vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(loader.handle, "vkGetInstanceProcAddr"));
   if (!vkGetInstanceProcAddr)
-    return "{\"driverLoadFailed\":true,\"probeError\":\"El paquete no ofrece vkGetInstanceProcAddr\"}";
+    return "{\"driverLoadFailed\":true,\"probeError\":\"Package does not provide vkGetInstanceProcAddr\"}";
   auto vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(vkGetInstanceProcAddr(nullptr, "vkCreateInstance"));
   if (!vkCreateInstance)
-    return "{\"driverLoadFailed\":true,\"probeError\":\"El paquete no ofrece vkCreateInstance\"}";
+    return "{\"driverLoadFailed\":true,\"probeError\":\"Package does not provide vkCreateInstance\"}";
   uint32_t loader_version = VK_API_VERSION_1_0;
   auto version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
       vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
@@ -44,13 +44,13 @@ std::string Probe(const char* hooks, const char* temp, const char* directory, co
   VkInstance instance{};
   VkResult result = vkCreateInstance(&ci, nullptr, &instance);
   if (result != VK_SUCCESS) {
-    return "{\"driverLoadFailed\":true,\"compatible\":false,\"missing\":[\"No se pudo iniciar Vulkan (" +
+    return "{\"driverLoadFailed\":true,\"compatible\":false,\"missing\":[\"Could not initialize Vulkan (" +
         std::to_string(result) + ")\"]}";
   }
   // Resolve every entry point through the chosen loader, never through the system libvulkan link.
 #define LOAD_INSTANCE(name) \
   auto name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(instance, #name)); \
-  if (!name) return "{\"driverLoadFailed\":true,\"probeError\":\"Driver con funciones Vulkan incompletas\"}"
+  if (!name) return "{\"driverLoadFailed\":true,\"probeError\":\"Driver has incomplete Vulkan functions\"}"
   LOAD_INSTANCE(vkDestroyInstance);
   LOAD_INSTANCE(vkEnumeratePhysicalDevices);
   LOAD_INSTANCE(vkGetPhysicalDeviceProperties);
@@ -64,13 +64,13 @@ std::string Probe(const char* hooks, const char* temp, const char* directory, co
   result = vkEnumeratePhysicalDevices(instance, &count, nullptr);
   if (result != VK_SUCCESS || !count) {
     vkDestroyInstance(instance, nullptr);
-    return "{\"driverLoadFailed\":true,\"compatible\":false,\"missing\":[\"No se encontro una GPU Vulkan\"]}";
+    return "{\"driverLoadFailed\":true,\"compatible\":false,\"missing\":[\"No Vulkan GPU found\"]}";
   }
   std::vector<VkPhysicalDevice> devices(count);
   result = vkEnumeratePhysicalDevices(instance, &count, devices.data());
   if (result != VK_SUCCESS) {
     vkDestroyInstance(instance, nullptr);
-    return "{\"compatible\":false,\"missing\":[\"No se pudo consultar la GPU\"]}";
+    return "{\"compatible\":false,\"missing\":[\"Could not query GPU properties\"]}";
   }
   // Android's native renderer selects the first physical device by default.
   VkPhysicalDevice gpu = devices[0];

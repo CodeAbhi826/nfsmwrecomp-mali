@@ -241,7 +241,7 @@ final class ShaderBuilder {
                     out.getFD().sync();
                 }
                 if (!temp.renameTo(target)) {
-                    throw new IOException("no se pudo guardar " + LIBRARY);
+                    throw new IOException("Could not save " + LIBRARY);
                 }
                 try (FileOutputStream out = new FileOutputStream(new File(gameRoot, VERSION_FILE))) {
                     out.write(LIBRARY_VERSION.getBytes("UTF-8"));
