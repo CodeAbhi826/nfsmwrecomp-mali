@@ -30,9 +30,17 @@ def check_sdl_jni():
         return False, "SDLActivity.java not found in project sources"
     with open(sdl_path, "r", encoding="utf-8") as f:
         content = f.read()
-    if "public static native void nativeSetupJNI();" not in content:
-        return False, "SDLActivity must declare 'public static native void nativeSetupJNI();' matching libSDL3.so ABI"
-    return True, "SDL JNI signature verified: nativeSetupJNI()V"
+    required_signatures = [
+        "public static native void nativeSetupJNI();",
+        "public static native void onNativePinchStart();",
+        "public static native void onNativePinchUpdate(float scale);",
+        "public static native void onNativePinchEnd();",
+        "public static native void onNativeAccel(float x, float y, float z);",
+    ]
+    for sig in required_signatures:
+        if sig not in content:
+            return False, f"SDLActivity must declare '{sig}' matching libSDL3.so ABI"
+    return True, "SDL JNI signatures verified (nativeSetupJNI, pinch, accel)"
 
 def check_no_blocking_incompatibility():
     main_path = os.path.join(REPO_ROOT, "android/app/src/main/java/com/nfsmw/android/MainActivity.java")

@@ -87,9 +87,6 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         launcherResumed = true;
-        if (optionsList != null) {
-            refreshOptions();
-        }
         if (checksList != null && hasStorageAccess()) {
             showChecks(sharedGameRoot());
         }
@@ -104,9 +101,6 @@ public final class MainActivity extends Activity {
 
     private static final int ACCENT = 0xFFFF8A00;
     private LinearLayout checksList;
-    private LinearLayout driverList;
-    private LinearLayout optionsList;
-    private LinearLayout audioList;
     private LinearLayout shaderPanel;
     private ProgressBar shaderProgress;
     private TextView shaderText;
@@ -168,7 +162,7 @@ public final class MainActivity extends Activity {
         gameCard.addView(selectFolder, folderParams);
 
         // Hero PLAY Button
-        launchGame = actionButton("▶   PLAY", true);
+        launchGame = actionButton("▶   START ENGINE", true);
         launchGame.setVisibility(View.GONE);
         launchGame.setOnClickListener(view -> play());
         LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(
@@ -176,43 +170,19 @@ public final class MainActivity extends Activity {
         playParams.topMargin = dp(14);
         content.addView(launchGame, playParams);
 
-        // Card 2: GPU Driver (Dedicated Mali setup)
-        LinearLayout driverCard = card();
-        content.addView(driverCard, marginBox(14));
-        driverCard.addView(sectionHeader("GPU & DRIVER"));
-        driverList = new LinearLayout(this);
-        driverList.setOrientation(LinearLayout.VERTICAL);
-        driverCard.addView(driverList);
+        // Action Buttons: Settings, Driver, Diagnostics
+        Button btnSettings = actionButton("⚙   Settings", false);
+        btnSettings.setOnClickListener(v -> showSettingsDialog());
+        content.addView(btnSettings, marginBox(12));
 
-        // Card 3: Graphics & Performance Settings
-        LinearLayout graphicsCard = card();
-        content.addView(graphicsCard, marginBox(14));
-        graphicsCard.addView(sectionHeader("GRAPHICS & PERFORMANCE"));
-        optionsList = new LinearLayout(this);
-        optionsList.setOrientation(LinearLayout.VERTICAL);
-        graphicsCard.addView(optionsList);
+        Button btnDriver = actionButton("🎮   Mali Vulkan Driver", false);
+        btnDriver.setOnClickListener(v -> chooseDriver());
+        content.addView(btnDriver, marginBox(10));
 
-        // Card 4: Audio & System Settings
-        LinearLayout audioCard = card();
-        content.addView(audioCard, marginBox(14));
-        audioCard.addView(sectionHeader("AUDIO & SYSTEM"));
-        audioList = new LinearLayout(this);
-        audioList.setOrientation(LinearLayout.VERTICAL);
-        audioCard.addView(audioList);
-
-        // Card 5: Diagnostics & Logs
-        LinearLayout diagCard = card();
-        content.addView(diagCard, marginBox(14));
-        diagCard.addView(sectionHeader("DIAGNOSTICS & LOGS"));
-        TextView diagDesc = label("Export system state, device GPU probe, and full live logs for debugging.", 12, 0x88FFFFFF, false);
-        diagDesc.setPadding(0, dp(2), 0, dp(8));
-        diagCard.addView(diagDesc);
-        sendReport = actionButton("Share Crash Report / Logs", false);
+        sendReport = actionButton("📋   Diagnostics & Share Logs", false);
         sendReport.setOnClickListener(view -> chooseReportDestination());
-        diagCard.addView(sendReport, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
+        content.addView(sendReport, marginBox(10));
 
-        refreshOptions();
         return scroll;
     }
 
@@ -446,58 +416,197 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshOptions() {
-        if (driverList != null) {
-            driverList.removeAllViews();
-            GpuDrivers.Driver driver = GpuDrivers.selected(this);
-            String driverName = driver == null ? "System Driver (Mali G71 HAL)" : driver.name;
-            driverList.addView(optionRow("Vulkan Driver", "Hardware driver or compatibility shim", driverName, this::chooseDriver));
-            driverList.addView(optionRow("Probe Driver", "Verify GPU extensions and descriptor limits", "Run Probe", () -> probeDriver(false)));
-        }
-        if (optionsList != null) {
-            optionsList.removeAllViews();
-            for (GameOptions.Option option : GameOptions.GRAPHICS) {
-                String value = GameOptions.get(this, option.key);
-                optionsList.addView(optionRow(option.title, optionSummary(option.key), option.label(value), () -> chooseOption(option)));
-            }
-            SharedPreferences controls = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
-            boolean stretch = controls.getBoolean("stretch", true);
-            optionsList.addView(optionRow("Aspect Ratio", "Display scaling mode",
-                    stretch ? "Stretch to Fullscreen" : "Original 16:9", () -> {
-                        controls.edit().putBoolean("stretch", !stretch).apply();
-                        refreshOptions();
-                    }));
-        }
-        if (audioList != null) {
-            audioList.removeAllViews();
-            for (GameOptions.Option option : GameOptions.AUDIO_SYSTEM) {
-                String value = GameOptions.get(this, option.key);
-                audioList.addView(optionRow(option.title, optionSummary(option.key), option.label(value), () -> chooseOption(option)));
-            }
-        }
+        // Options are now accessed via showSettingsDialog
     }
 
-    private static String optionSummary(String key) {
-        switch (key) {
-            case GameOptions.RENDERER: return "Native Vulkan pipeline vs Compatibility mode";
-            case GameOptions.EDRAM: return "Host render target vs shader interlock";
-            case GameOptions.RESOLUTION: return "Internal rendering resolution";
-            case GameOptions.RESOLUTION_SCALE: return "Resolution scaling multiplier";
-            case GameOptions.FPS: return "Target framerate cap";
-            case GameOptions.AA: return "Edge antialiasing filter";
-            case GameOptions.ANISOTROPIC: return "Texture anisotropic filtering level";
-            case GameOptions.PIPELINE_THREADS: return "Worker threads for shader pipelines";
-            case GameOptions.TEXTURE_CACHE: return "Soft memory limit for texture cache";
-            case GameOptions.STABILITY: return "Bifrost occlusion and visual stability";
-            case GameOptions.SHADOWS: return "Shadow calculation frequency";
-            case GameOptions.CAR_REFLECTIONS: return "Vehicle cubemap reflection detail";
-            case GameOptions.ROAD_REFLECTION: return "Wet road surface reflections";
-            case GameOptions.SKY: return "Atmospheric sky shader glow";
-            case GameOptions.FILTER: return "Post-processing color grade";
-            case "volume": return "Game audio master volume";
-            case "audio_buffer": return "Audio queue buffer latency";
-            case "language": return "In-game text and subtitles language";
-            default: return "";
+    private void showSettingsDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(0xFF10161E);
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(16), dp(16), dp(16), dp(20));
+        scroll.addView(layout, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+
+        TextView title = label("SETTINGS", 18, ACCENT, true);
+        title.setGravity(Gravity.CENTER);
+        title.setPadding(0, 0, 0, dp(12));
+        layout.addView(title);
+
+        SharedPreferences controls = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
+
+        // Section 1: GRAPHICS ENGINE & VULKAN
+        layout.addView(sectionHeader("⚡ GRAPHICS ENGINE & VULKAN"));
+        LinearLayout group1 = card();
+        layout.addView(group1, marginBox(4));
+
+        for (GameOptions.Option opt : new GameOptions.Option[]{
+                GameOptions.find(GameOptions.RENDERER),
+                GameOptions.find(GameOptions.RESOLUTION),
+                GameOptions.find(GameOptions.EDRAM),
+                GameOptions.find(GameOptions.PIPELINE_THREADS),
+        }) {
+            String val = GameOptions.get(this, opt.key);
+            group1.addView(dialogOptionRow(opt.title, opt.shortLabel(val), () -> {
+                chooseOptionWithDescription(opt, this::showSettingsDialog);
+            }));
         }
+
+        // Section 2: VIDEO & PERFORMANCE
+        layout.addView(sectionHeader("🎮 VIDEO & PERFORMANCE"), marginBox(14));
+        LinearLayout group2 = card();
+        layout.addView(group2, marginBox(4));
+
+        for (GameOptions.Option opt : new GameOptions.Option[]{
+                GameOptions.find(GameOptions.TEXTURE_CACHE),
+                GameOptions.find(GameOptions.FPS),
+                GameOptions.find(GameOptions.AA),
+                GameOptions.find(GameOptions.ANISOTROPIC),
+                GameOptions.find(GameOptions.STABILITY),
+                GameOptions.find(GameOptions.CAR_REFLECTIONS),
+                GameOptions.find(GameOptions.FILTER),
+        }) {
+            String val = GameOptions.get(this, opt.key);
+            group2.addView(dialogOptionRow(opt.title, opt.shortLabel(val), () -> {
+                chooseOptionWithDescription(opt, this::showSettingsDialog);
+            }));
+        }
+
+        group2.addView(switchRow("Stretch Screen (Fill Display)", controls.getBoolean("stretch", true), (btn, on) -> {
+            controls.edit().putBoolean("stretch", on).apply();
+        }));
+        group2.addView(switchRow("Optimize 3D Textures to 2D", controls.getBoolean("gpu_3d_to_2d", true), (btn, on) -> {
+            controls.edit().putBoolean("gpu_3d_to_2d", on).apply();
+        }));
+        group2.addView(switchRow("Async Shader Compilation", controls.getBoolean("async_shaders", true), (btn, on) -> {
+            controls.edit().putBoolean("async_shaders", on).apply();
+        }));
+        group2.addView(switchRow("Vertical Sync (V-Sync)", controls.getBoolean("vsync", true), (btn, on) -> {
+            controls.edit().putBoolean("vsync", on).apply();
+        }));
+        group2.addView(switchRow("Skip Incomplete Frames", controls.getBoolean("async_skip", true), (btn, on) -> {
+            controls.edit().putBoolean("async_skip", on).apply();
+        }));
+
+        // Section 3: AUDIO & SYSTEM
+        layout.addView(sectionHeader("🔊 AUDIO & SYSTEM"), marginBox(14));
+        LinearLayout group3 = card();
+        layout.addView(group3, marginBox(4));
+
+        group3.addView(switchRow("Black Edition Content (Bonus Cars)", controls.getBoolean("black_edition", true), (btn, on) -> {
+            controls.edit().putBoolean("black_edition", on).apply();
+        }));
+        group3.addView(switchRow("On-Screen Virtual Controls", controls.getBoolean("touch_controls", true), (btn, on) -> {
+            controls.edit().putBoolean("touch_controls", on).apply();
+        }));
+
+        for (GameOptions.Option opt : GameOptions.AUDIO_SYSTEM) {
+            String val = GameOptions.get(this, opt.key);
+            group3.addView(dialogOptionRow(opt.title, opt.shortLabel(val), () -> {
+                chooseOptionWithDescription(opt, this::showSettingsDialog);
+            }));
+        }
+
+        builder.setView(scroll);
+        builder.setPositiveButton("SAVE & APPLY", (d, w) -> {
+            File userDir = new File(getFilesDir(), "nfsmw/user");
+            GameOptions.writeToml(this, userDir);
+            File extDir = getExternalFilesDir(null);
+            if (extDir != null) GameOptions.writeToml(this, extDir);
+            d.dismiss();
+        });
+        builder.setNeutralButton("RESET DEFAULTS", (d, w) -> {
+            for (GameOptions.Option opt : GameOptions.ALL) {
+                GameOptions.set(this, opt.key, opt.defaultValue);
+            }
+            controls.edit()
+                    .putBoolean("stretch", true)
+                    .putBoolean("gpu_3d_to_2d", true)
+                    .putBoolean("async_shaders", true)
+                    .putBoolean("vsync", true)
+                    .putBoolean("async_skip", true)
+                    .putBoolean("black_edition", true)
+                    .putBoolean("touch_controls", true)
+                    .apply();
+            d.dismiss();
+            showSettingsDialog();
+        });
+        builder.setNegativeButton("CLOSE", null);
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    private View dialogOptionRow(String title, String badgeValue, Runnable onClick) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0x14FFFFFF);
+        bg.setCornerRadius(dp(8));
+        row.setBackground(bg);
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setOnClickListener(v -> onClick.run());
+
+        TextView titleView = label(title, 13, 0xFFFFFFFF, true);
+        row.addView(titleView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView current = label(badgeValue + "  ›", 13, ACCENT, true);
+        current.setGravity(Gravity.END);
+        current.setPadding(dp(8), 0, 0, 0);
+        row.addView(current);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(6);
+        row.setLayoutParams(lp);
+        return row;
+    }
+
+    private View switchRow(String title, boolean initial, android.widget.CompoundButton.OnCheckedChangeListener onCheck) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(6), dp(12), dp(6));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0x14FFFFFF);
+        bg.setCornerRadius(dp(8));
+        row.setBackground(bg);
+
+        TextView titleView = label(title, 13, 0xFFFFFFFF, false);
+        row.addView(titleView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        android.widget.Switch sw = new android.widget.Switch(this);
+        sw.setChecked(initial);
+        sw.setOnCheckedChangeListener(onCheck);
+        row.addView(sw);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(6);
+        row.setLayoutParams(lp);
+        return row;
+    }
+
+    private void chooseOptionWithDescription(GameOptions.Option option, Runnable onDone) {
+        String current = GameOptions.get(this, option.key);
+        int checked = 0;
+        for (int i = 0; i < option.values.length; i++) {
+            if (option.values[i].equals(current)) checked = i;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        builder.setTitle(option.title);
+        builder.setSingleChoiceItems(option.labels, checked, (dialog, which) -> {
+            GameOptions.set(this, option.key, option.values[which]);
+            dialog.dismiss();
+            if (onDone != null) onDone.run();
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
     }
 
     private void chooseDriver() {
@@ -564,58 +673,6 @@ public final class MainActivity extends Activity {
                         GpuDrivers.select(this, ""); refreshOptions();
                     }).show();
         } catch (Exception error) { playAfterProbe = false; reportError("Invalid diagnostic report: " + error.getMessage()); }
-    }
-
-    private void chooseOption(GameOptions.Option option) {
-        String current = GameOptions.get(this, option.key);
-        int checked = 0;
-        for (int i = 0; i < option.values.length; i++) {
-            if (option.values[i].equals(current)) checked = i;
-        }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(option.title)
-                .setSingleChoiceItems(option.labels, checked, (dialog, which) -> {
-                    GameOptions.set(this, option.key, option.values[which]);
-                    dialog.dismiss();
-                    refreshOptions();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private View optionRow(String title, String summary, String value, Runnable onClick) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(14), dp(10), dp(14), dp(10));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x14FFFFFF);
-        bg.setCornerRadius(dp(10));
-        row.setBackground(bg);
-        row.setClickable(true);
-        row.setFocusable(true);
-        row.setOnClickListener(v -> onClick.run());
-
-        LinearLayout textCol = new LinearLayout(this);
-        textCol.setOrientation(LinearLayout.VERTICAL);
-        textCol.addView(label(title, 14, 0xFFFFFFFF, true));
-        if (summary != null && !summary.isEmpty()) {
-            TextView sub = label(summary, 12, 0x88FFFFFF, false);
-            sub.setPadding(0, dp(2), 0, 0);
-            textCol.addView(sub);
-        }
-        row.addView(textCol, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        TextView current = label(value + "  ›", 13, ACCENT, true);
-        current.setGravity(Gravity.END);
-        current.setPadding(dp(8), 0, 0, 0);
-        row.addView(current);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(6);
-        row.setLayoutParams(lp);
-        return row;
     }
 
     private void showChecks(File folder) {

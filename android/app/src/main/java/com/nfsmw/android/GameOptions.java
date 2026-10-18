@@ -22,15 +22,21 @@ final class GameOptions {
         final String cvar;
         final String[] values;
         final String[] labels;
+        final String[] shortLabels;
         final String defaultValue;
 
-        Option(String key, String title, String cvar, String defaultValue, String[] values, String[] labels) {
+        Option(String key, String title, String cvar, String defaultValue, String[] values, String[] labels, String[] shortLabels) {
             this.key = key;
             this.title = title;
             this.cvar = cvar;
             this.defaultValue = defaultValue;
             this.values = values;
             this.labels = labels;
+            this.shortLabels = shortLabels;
+        }
+
+        Option(String key, String title, String cvar, String defaultValue, String[] values, String[] labels) {
+            this(key, title, cvar, defaultValue, values, labels, labels);
         }
 
         String label(String value) {
@@ -41,12 +47,20 @@ final class GameOptions {
             }
             return value;
         }
+
+        String shortLabel(String value) {
+            for (int i = 0; i < values.length; i++) {
+                if (values[i].equals(value)) {
+                    return shortLabels != null && i < shortLabels.length ? shortLabels[i] : labels[i];
+                }
+            }
+            return value;
+        }
     }
 
     static final String RENDERER = "renderer";
     static final String EDRAM = "edram";
     static final String RESOLUTION = "resolution";
-    static final String RESOLUTION_SCALE = "resolution_scale";
     static final String FPS = "fps";
     static final String AA = "aa";
     static final String ANISOTROPIC = "anisotropic";
@@ -62,62 +76,76 @@ final class GameOptions {
     static final Option[] GRAPHICS = {
             new Option(RENDERER, "GPU Plugin / Renderer", "nfsmw_renderizador", "nativo",
                     new String[] {"nativo", "xenos"},
-                    new String[] {"Plume (Native Vulkan - Fast)", "Xenos (Emulated Vulkan)"}),
+                    new String[] {"Plume (Native Vulkan - Fast)", "Xenos (Emulated Vulkan)"},
+                    new String[] {"Plume", "Xenos"}),
             new Option(EDRAM, "EDRAM Render Target", "render_target_path_vulkan", "rtv",
-                    new String[] {"rtv", "rov"},
-                    new String[] {"RTV (FBO Host - Fast / Recommended)", "ROV (Pixel Shader Interlock - Slow)"}),
-            new Option(RESOLUTION, "Internal Resolution", "nfsmw_resolucion_interna", "1280x720",
-                    new String[] {"1280x720", "854x480", "1024x576", "1920x1080"},
-                    new String[] {"720p (1280x720 - Native Xbox 360)", "480p (854x480 - Performance)",
-                            "576p (1024x576 - Balanced)", "1080p (1920x1080 - Full HD)"}),
-            new Option(RESOLUTION_SCALE, "Resolution Scale", "resolution_scale", "1.0",
-                    new String[] {"1.0", "0.75", "0.5"},
-                    new String[] {"1.0x (Native)", "0.75x (Performance)", "0.5x (Ultra Performance)"}),
+                    new String[] {"rtv"},
+                    new String[] {"RTV (FBO Host - Fast / Recommended)"},
+                    new String[] {"RTV"}),
+            new Option(RESOLUTION, "Output Resolution", "nfsmw_resolucion_interna", "1280x720",
+                    new String[] {"1280x720", "960x540", "854x480"},
+                    new String[] {"720p (1280x720 - Native Xbox 360)", "540p (960x540 - Performance Mode)", "480p (854x480 - Performance)"},
+                    new String[] {"720p", "540p", "480p"}),
             new Option(FPS, "Target Framerate Cap", "nfsmw_limite_fps", "60",
-                    new String[] {"60", "30", "90", "120"},
-                    new String[] {"60 FPS (Smooth)", "30 FPS (Battery Saver)", "90 FPS", "120 FPS"}),
-            new Option(AA, "Antialiasing", "nfsmw_antialiasing", "apagado",
+                    new String[] {"60", "30"},
+                    new String[] {"60 FPS (Smooth)", "30 FPS (Battery Saver)"},
+                    new String[] {"60 FPS", "30 FPS"}),
+            new Option(AA, "Anti-Aliasing", "nfsmw_antialiasing", "apagado",
                     new String[] {"apagado", "fxaa"},
-                    new String[] {"Disabled (none)", "FXAA"}),
+                    new String[] {"Disabled (none)", "FXAA"},
+                    new String[] {"Off", "FXAA"}),
             new Option(ANISOTROPIC, "Anisotropic Filtering", "anisotropic_override", "0",
                     new String[] {"0", "2", "4", "8", "16"},
-                    new String[] {"Disabled (0x)", "2x", "4x", "8x", "16x"}),
+                    new String[] {"Disabled (0x)", "2x", "4x", "8x", "16x"},
+                    new String[] {"Off", "2x", "4x", "8x", "16x"}),
             new Option(PIPELINE_THREADS, "Pipeline Compilation Threads", "vulkan_pipeline_creation_threads", "2",
-                    new String[] {"2", "4"},
-                    new String[] {"2 Threads (Recommended - Cool & Stable)", "4 Threads (Fast Compilation)"}),
+                    new String[] {"1", "2", "4"},
+                    new String[] {"1 Thread (Battery Saver)", "2 Threads (Recommended - Cool & Stable)", "4 Threads (Fast Compilation)"},
+                    new String[] {"1 Thread", "2 Threads", "4 Threads"}),
             new Option(TEXTURE_CACHE, "Texture Cache Memory Limit", "texture_cache_memory_limit_soft", "512",
-                    new String[] {"256", "512", "1024"},
-                    new String[] {"256 MB (Low RAM)", "512 MB (Default)", "1024 MB (High Quality)"}),
+                    new String[] {"256", "384", "512"},
+                    new String[] {"256 MB (Low RAM - Avoids OOM)", "384 MB (Balanced)", "512 MB (Default Xbox 360)"},
+                    new String[] {"256 MB", "384 MB", "512 MB"}),
             new Option(STABILITY, "Mali GPU Guard", "nfsmw_consultas_oclusion", "auto",
                     new String[] {"auto", "off", "on"},
-                    new String[] {"Automatic (Mali Guard)", "Maximum Compatibility (Disable Flare)", "Full Effects"}),
+                    new String[] {"Automatic (Mali Guard)", "Maximum Compatibility (Disable Flare)", "Full Effects"},
+                    new String[] {"Auto", "Compatibility", "Full"}),
             new Option(SHADOWS, "Shadows Frequency", "nfsmw_sombras_cada", "1",
                     new String[] {"1", "2"},
-                    new String[] {"Every frame (High)", "Every 2 frames (Performance)"}),
+                    new String[] {"Every frame (High)", "Every 2 frames (Performance)"},
+                    new String[] {"Every frame", "Every 2 frames"}),
             new Option(CAR_REFLECTIONS, "Car Reflections", "nfsmw_cubemap_caras_max", "6",
                     new String[] {"6", "2", "1"},
-                    new String[] {"High (6 faces)", "Medium (2 faces)", "Low (1 face - Fast)"}),
+                    new String[] {"High (6 faces)", "Medium (2 faces)", "Low (1 face - Fast)"},
+                    new String[] {"6 faces", "2 faces", "1 face"}),
             new Option(ROAD_REFLECTION, "Wet Road Reflections", "nfsmw_reflejo_carretera", "true",
                     new String[] {"true", "false"},
-                    new String[] {"Enabled", "Disabled"}),
+                    new String[] {"Enabled", "Disabled"},
+                    new String[] {"On", "Off"}),
             new Option(SKY, "Atmospheric Sky Glow", "nfsmw_resplandor_cielo", "natural",
                     new String[] {"natural", "original", "suave"},
-                    new String[] {"Natural", "Original (Xbox 360)", "Soft"}),
+                    new String[] {"Natural", "Original (Xbox 360)", "Soft"},
+                    new String[] {"Natural", "Original", "Soft"}),
             new Option(FILTER, "Post-Processing Filter", "nfsmw_posproceso", "apagado",
                     new String[] {"apagado", "cine", "vivo", "calido", "frio", "sepia", "noir", "crt"},
-                    new String[] {"No filter", "Cinema", "Vivid", "Warm", "Cool", "Sepia", "Noir", "CRT"}),
+                    new String[] {"No filter", "Cinema", "Vivid", "Warm", "Cool", "Sepia", "Noir", "CRT"},
+                    new String[] {"None", "Cinema", "Vivid", "Warm", "Cool", "Sepia", "Noir", "CRT"}),
     };
 
     static final Option[] AUDIO_SYSTEM = {
             new Option("volume", "Game Master Volume", "audio_ganancia_pct", "100",
                     new String[] {"100", "125", "150", "200"},
-                    new String[] {"Normal (100%)", "High (125%)", "Very high (150%)", "Maximum (200%)"}),
+                    new String[] {"Normal (100%)", "High (125%)", "Very high (150%)", "Maximum (200%)"},
+                    new String[] {"100%", "125%", "150%", "200%"}),
             new Option("audio_buffer", "Audio Buffer Latency", "audio_sdl_bomba_cola", "12",
                     new String[] {"12", "20"},
-                    new String[] {"Normal (64 ms)", "Large (107 ms, if crackling)"}),
+                    new String[] {"Normal (64 ms)", "Large (107 ms, if crackling)"},
+                    new String[] {"64 ms", "107 ms"}),
             new Option("language", "In-Game Language", "nfsmw_idioma", "-1",
                     new String[] {"-1", "0", "4", "1", "2", "3", "5", "6", "7", "12", "13"},
                     new String[] {"Game Edition Default", "English", "Español", "Français", "Deutsch", "Italiano",
+                            "Nederlands", "Svenska", "Dansk", "Polski", "Suomi"},
+                    new String[] {"Default", "English", "Español", "Français", "Deutsch", "Italiano",
                             "Nederlands", "Svenska", "Dansk", "Polski", "Suomi"}),
     };
 
@@ -218,7 +246,7 @@ final class GameOptions {
             sb.append("video_mode_width = ").append(dims[0]).append("\n");
             sb.append("video_mode_height = ").append(dims[1]).append("\n");
         }
-        sb.append("resolution_scale = ").append(get(context, RESOLUTION_SCALE)).append("\n");
+        sb.append("resolution_scale = 1.0\n");
         sb.append("fullscreen = true\n");
         SharedPreferences controls = context.getSharedPreferences("nfsmw_controls", Context.MODE_PRIVATE);
         boolean stretch = controls.getBoolean("stretch", true);
