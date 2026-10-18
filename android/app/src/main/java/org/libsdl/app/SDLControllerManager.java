@@ -95,29 +95,45 @@ public class SDLControllerManager
     /**
      * This method is called by SDL using JNI.
      */
+    public static void pollInputDevices() {
+        if (mJoystickHandler != null) {
+            mJoystickHandler.detectDevices();
+        }
+    }
+
     static void detectDevices() {
-        mJoystickHandler.detectDevices();
+        pollInputDevices();
     }
 
     /**
      * This method is called by SDL using JNI.
      */
     static void joystickSetLED(int device_id, int red, int green, int blue) {
-        mJoystickHandler.setLED(device_id, red, green, blue);
+        if (mJoystickHandler != null) {
+            mJoystickHandler.setLED(device_id, red, green, blue);
+        }
     }
 
     /**
      * This method is called by SDL using JNI.
      */
     static void joystickSetSensorsEnabled(int device_id, boolean enabled) {
-        mJoystickHandler.setSensorsEnabled(device_id, enabled);
+        if (mJoystickHandler != null) {
+            mJoystickHandler.setSensorsEnabled(device_id, enabled);
+        }
     }
 
     /**
      * This method is called by SDL using JNI.
      */
+    public static void pollHapticDevices() {
+        if (mHapticHandler != null) {
+            mHapticHandler.detectHapticDevices();
+        }
+    }
+
     static void detectHapticDevices() {
-        mHapticHandler.detectHapticDevices();
+        pollHapticDevices();
     }
 
     /**
