@@ -11,6 +11,7 @@
 #define REXCRT_HEAP 0
 
 #include <rex/ppc.h>
+#include <rex/ppc/func.h>
 #include <rex/image_info.h>
 #include <rex/logging.h>
 #include <rex/chrono/clock.h>
@@ -21,3 +22,4 @@
 #include <atomic>
 
 extern const rex::PPCImageInfo PPCImageConfig;
+extern PPCFuncMapping PPCFuncMappings[];
