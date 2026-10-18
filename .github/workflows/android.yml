@@ -22,7 +22,10 @@ jobs:
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses || true
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
+          mkdir -p "$ANDROID_HOME/cmake/3.30.5/bin"
+          ln -sf "$(which cmake)" "$ANDROID_HOME/cmake/3.30.5/bin/cmake"
+          ln -sf "$(which ninja)" "$ANDROID_HOME/cmake/3.30.5/bin/ninja"
 
       - name: Fetch ReXGlue Third-Party Dependencies
         run: python3 tools/fetch_thirdparty.py

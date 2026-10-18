@@ -113,7 +113,7 @@ final class ShaderBuilder {
 
             @Override
             public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
-                finish(null, "el compilador de shaders se cerró (memoria insuficiente)");
+                finish(null, "the shader compiler exited unexpectedly (out of memory)");
                 return true;
             }
         });

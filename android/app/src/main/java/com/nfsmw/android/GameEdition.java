@@ -22,7 +22,7 @@ import java.security.MessageDigest;
  */
 final class GameEdition {
     static final String SUPPORTED_SHA256 = "aad15fc218d034de3131f746e0b763dd8049a40dd676efc87667fcaf4fc72694";
-    static final String SUPPORTED_NAME = "PAL (España)";
+    static final String SUPPORTED_NAME = "PAL (Spanish)";
     private static final String PREFS = "nfsmw_edition";
 
     final String sha256;
@@ -39,7 +39,7 @@ final class GameEdition {
 
     String describe() {
         if (supported()) return SUPPORTED_NAME;
-        return name != null ? name : "desconocida";
+        return name != null ? name : "Unknown";
     }
 
     /** The edition of the game folder's default.xex, or null if it cannot be read. Cached by size and date. */
