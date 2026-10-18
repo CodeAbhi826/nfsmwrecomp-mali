@@ -46,7 +46,7 @@ public class SDLControllerManager
                                           float value);
     static native void onNativeHat(int device_id, int hat_id,
                                           int x, int y);
-    static native void onNativeJoySensor(int device_id, int sensor_type, long sensor_timestamp, float x, float y, float z);
+    static void onNativeJoySensor(int device_id, int sensor_type, long sensor_timestamp, float x, float y, float z) {}
 
     protected static SDLJoystickHandler mJoystickHandler;
     protected static SDLHapticHandler mHapticHandler;
