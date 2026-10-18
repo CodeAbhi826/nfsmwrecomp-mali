@@ -138,41 +138,75 @@ public final class TouchControlsView extends View {
         this.host = host;
     }
 
+    // Victor's authentic NFS Most Wanted touch control palette: transparent interior, crisp white stroke, olive/gold press
+    private static final int COLOR_FILL = Color.TRANSPARENT;
+    private static final int COLOR_BORDER = Color.argb(215, 255, 255, 255);     // 0xD7FFFFFF crisp bright white
+    private static final int COLOR_PRESSED = Color.argb(190, 0x6F, 0x74, 0x32);    // 0xBE6F7432 authentic olive/gold highlight
+    private static final int COLOR_DPAD_PRESS = Color.argb(180, 0x6F, 0x74, 0x32); // 0xB46F7432
+
+    private static int applyAlpha(int color, float alpha) {
+        int baseAlpha = (color >>> 24);
+        int finalAlpha = Math.round(baseAlpha * alpha);
+        return (color & 0x00FFFFFF) | (finalAlpha << 24);
+    }
+
     // ---- Layout ------------------------------------------------------------------------------------------
 
     private void createControls() {
-        final int grey = 0xFF18232E;
+        final int grey = COLOR_FILL;
         // Triggers and Bumpers (Top): Pill shape
-        add(new Control("lt", PILL, "LT", "", 0, TRIGGER_LEFT, grey, .07f, .13f, .10f, true));
-        add(new Control("lb", PILL, "LB", "", LB, TRIGGER_NONE, grey, .20f, .13f, .10f, true));
-        add(new Control("rb", PILL, "RB", "", RB, TRIGGER_NONE, grey, .81f, .13f, .10f, true));
-        add(new Control("rt", PILL, "RT", "", 0, TRIGGER_RIGHT, grey, .93f, .13f, .10f, true));
+        add(new Control("lt", PILL, "LT", "", 0, TRIGGER_LEFT, grey, .07f, .10f, 1.0f, true));
+        add(new Control("lb", PILL, "LB", "", LB, TRIGGER_NONE, grey, .20f, .10f, 1.0f, true));
+        add(new Control("rb", PILL, "RB", "", RB, TRIGGER_NONE, grey, .80f, .10f, 1.0f, true));
+        add(new Control("rt", PILL, "RT", "", 0, TRIGGER_RIGHT, grey, .93f, .10f, 1.0f, true));
 
         // Thumbstick Clicks (L3 / R3)
-        add(new Control("l3", BUTTON, "L3", "", LTHUMB, TRIGGER_NONE, grey, .07f, .48f, .11f, true));
-        add(new Control("r3", BUTTON, "R3", "", RTHUMB, TRIGGER_NONE, grey, .73f, .48f, .11f, true));
+        add(new Control("l3", BUTTON, "L3", "", LTHUMB, TRIGGER_NONE, grey, .07f, .48f, 1.0f, true));
+        add(new Control("r3", BUTTON, "R3", "", RTHUMB, TRIGGER_NONE, grey, .73f, .48f, 1.0f, true));
 
         // Left Stick (with "L" on knob) & Cross D-Pad
-        add(new Control("ls", STICK, "L", "", 0, TRIGGER_NONE, grey, .16f, .74f, .36f, true));
-        add(new Control("dpad", DPAD, "", "", 0, TRIGGER_NONE, grey, .32f, .72f, .32f, true));
+        add(new Control("ls", STICK, "L", "", 0, TRIGGER_NONE, grey, .16f, .73f, 1.0f, true));
+        add(new Control("dpad", DPAD, "", "", 0, TRIGGER_NONE, grey, .32f, .72f, 1.0f, true));
 
-        // Center: Back, Menu, Start
-        add(new Control("back", PILL, "BACK", "", BACK, TRIGGER_NONE, grey, .44f, .78f, .09f, true));
-        add(new Control("menu", MENU, "⚙", "", 0, TRIGGER_NONE, grey, .50f, .08f, .08f, true));
-        add(new Control("start", PILL, "START", "", START, TRIGGER_NONE, grey, .55f, .78f, .09f, true));
+        // Center: Back, Menu (Settings gear), Start
+        add(new Control("back", PILL, "BACK", "", BACK, TRIGGER_NONE, grey, .44f, .79f, 1.0f, true));
+        add(new Control("menu", MENU, "⚙", "", 0, TRIGGER_NONE, grey, .50f, .08f, 1.0f, true));
+        add(new Control("start", PILL, "START", "", START, TRIGGER_NONE, grey, .55f, .79f, 1.0f, true));
 
         // Right Stick (with "R" on knob)
-        add(new Control("rs", STICK, "R", "", 0, TRIGGER_NONE, grey, .67f, .76f, .36f, true));
+        add(new Control("rs", STICK, "R", "", 0, TRIGGER_NONE, grey, .67f, .77f, 1.0f, true));
 
         // Diamond A/B/X/Y Buttons (Right side)
-        add(new Control("y", BUTTON, "Y", "", Y, TRIGGER_NONE, grey, .85f, .60f, .13f, true));
-        add(new Control("x", BUTTON, "X", "", X, TRIGGER_NONE, grey, .81f, .68f, .13f, true));
-        add(new Control("b", BUTTON, "B", "", B, TRIGGER_NONE, grey, .89f, .68f, .13f, true));
-        add(new Control("a", BUTTON, "A", "", A, TRIGGER_NONE, grey, .85f, .76f, .13f, true));
+        final float faceX = .85f;
+        final float faceY = .68f;
+        add(new Control("y", BUTTON, "Y", "", Y, TRIGGER_NONE, grey, faceX, faceY - .0756f, 1.0f, true));
+        add(new Control("x", BUTTON, "X", "", X, TRIGGER_NONE, grey, faceX - .0425f, faceY, 1.0f, true));
+        add(new Control("b", BUTTON, "B", "", B, TRIGGER_NONE, grey, faceX + .0425f, faceY, 1.0f, true));
+        add(new Control("a", BUTTON, "A", "", A, TRIGGER_NONE, grey, faceX, faceY + .0756f, 1.0f, true));
     }
 
     private void add(Control c) {
         controls.add(c);
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        if (w > 0 && h > 0) {
+            float u = Math.min(w / 16f, h / 9f);
+            float faceX = w * 0.85f;
+            float faceY = h * 0.68f;
+            float offset = u * 0.68f;
+            for (Control c : controls) {
+                if (c.id.equals("a")) { c.defX = faceX / w; c.defY = (faceY + offset) / h; }
+                else if (c.id.equals("b")) { c.defX = (faceX + offset) / w; c.defY = faceY / h; }
+                else if (c.id.equals("x")) { c.defX = (faceX - offset) / w; c.defY = faceY / h; }
+                else if (c.id.equals("y")) { c.defX = faceX / w; c.defY = (faceY - offset) / h; }
+            }
+            if (!prefs.contains("layout")) {
+                resetLayout();
+            }
+        }
     }
 
     private void load() {
@@ -184,7 +218,7 @@ public final class TouchControlsView extends View {
         stretch = prefs.getBoolean("stretch", stretch);
         showFps = prefs.getBoolean("show_fps", false);
         int layoutVer = prefs.getInt("layout_version", 0);
-        if (layoutVer < 2) {
+        if (layoutVer < 3) {
             resetLayout();
             save();
             return;
@@ -200,7 +234,7 @@ public final class TouchControlsView extends View {
                 if (o != null) {
                     c.x = clamp((float) o.optDouble("x", c.defX), 0f, 1f);
                     c.y = clamp((float) o.optDouble("y", c.defY), 0f, 1f);
-                    c.size = clamp((float) o.optDouble("s", c.defSize), .06f, .8f);
+                    c.size = clamp((float) o.optDouble("s", c.defSize), 0.5f, 2.5f);
                     c.visible = o.optBoolean("v", c.defVisible);
                 }
             }
@@ -221,7 +255,7 @@ public final class TouchControlsView extends View {
             return;
         }
         prefs.edit()
-                .putInt("layout_version", 2)
+                .putInt("layout_version", 3)
                 .putString("layout", all.toString())
                 .putFloat("opacity", opacity)
                 .putBoolean("haptics", haptics)
@@ -234,8 +268,19 @@ public final class TouchControlsView extends View {
     }
 
     void resetLayout() {
+        int w = getWidth(), h = getHeight();
+        float u = unit();
+        float faceX = (w > 0 ? w * 0.85f : 0.85f * 1280f);
+        float faceY = (h > 0 ? h * 0.68f : 0.68f * 720f);
+        float offset = u * 0.68f;
         for (Control c : controls) {
             c.reset();
+            if (w > 0 && h > 0) {
+                if (c.id.equals("a")) { c.x = faceX / w; c.y = (faceY + offset) / h; }
+                else if (c.id.equals("b")) { c.x = (faceX + offset) / w; c.y = faceY / h; }
+                else if (c.id.equals("x")) { c.x = (faceX - offset) / w; c.y = faceY / h; }
+                else if (c.id.equals("y")) { c.x = faceX / w; c.y = (faceY - offset) / h; }
+            }
         }
         selected = null;
         invalidate();
@@ -270,9 +315,20 @@ public final class TouchControlsView extends View {
 
     void resizeSelected(float factor) {
         if (selected != null) {
-            selected.size = clamp(selected.size * factor, .06f, .8f);
+            selected.size = clamp(selected.size * factor, 0.5f, 2.5f);
             invalidate();
         }
+    }
+
+    List<Control> controls() {
+        return controls;
+    }
+
+    void resizeAll(float scale) {
+        for (Control c : controls) {
+            c.size = clamp(scale, 0.5f, 2.5f);
+        }
+        invalidate();
     }
 
     void toggleSelectedVisible() {
@@ -500,19 +556,50 @@ public final class TouchControlsView extends View {
             float halfW = pillWidth(c) * .5f * slack, halfH = pillHeight(c) * .5f * slack;
             return Math.abs(px - cx) <= halfW && Math.abs(py - cy) <= halfH;
         }
+        if (c.type == DPAD) {
+            float r = radius(c) * slack;
+            return Math.abs(px - cx) <= r && Math.abs(py - cy) <= r;
+        }
         return Math.hypot(px - cx, py - cy) <= radius(c) * slack;
     }
 
+    private float unit() {
+        int w = getWidth(), h = getHeight();
+        if (w <= 0 || h <= 0) return 80f;
+        return Math.min(w / 16f, h / 9f);
+    }
+
     private float radius(Control c) {
-        return c.size * getHeight() * .5f;
+        float u = unit() * c.size;
+        switch (c.type) {
+            case STICK:
+                return u * 0.78f;
+            case DPAD:
+                return u * 0.98f;
+            case BUTTON:
+                if (c.id.equals("l3") || c.id.equals("r3")) {
+                    return u * 0.38f * 0.82f;
+                }
+                return u * 0.38f;
+            case MENU:
+                return u * 0.38f;
+            default:
+                return u * 0.38f;
+        }
     }
 
     private float pillWidth(Control c) {
-        return c.size * getHeight() * 1.8f;
+        float u = unit() * c.size;
+        if (c.id.equals("back")) return u * 0.82f;
+        if (c.id.equals("start")) return u * 0.92f;
+        if (c.id.equals("menu")) return u * 0.80f;
+        return u * 1.25f;
     }
 
     private float pillHeight(Control c) {
-        return c.size * getHeight();
+        float u = unit() * c.size;
+        if (c.id.equals("back") || c.id.equals("start") || c.id.equals("menu")) return u * 0.45f;
+        return u * 0.55f;
     }
 
     private void releaseAll() {
@@ -664,58 +751,52 @@ public final class TouchControlsView extends View {
                 boolean held = c.pointer >= 0;
                 float bx = held ? c.originX : cx, by = held ? c.originY : cy;
                 boolean tiltMode = c.id.equals("ls") && tiltSteering && !editing && !held;
-                fill.setColor(withAlpha(0xFF101820, a * 110 / 255));
-                canvas.drawCircle(bx, by, r, fill);
-                stroke.setStrokeWidth(Math.max(2.5f, r * .04f));
-                stroke.setColor(withAlpha(0xFFFFFFFF, a * 180 / 255));
+                stroke.setStrokeWidth(2.0f);
+                stroke.setColor(applyAlpha(COLOR_BORDER, alpha));
                 canvas.drawCircle(bx, by, r, stroke);
-                float knobR = r * .44f;
+
+                float knobR = r * .43f;
                 float kx = bx + (tiltMode ? clamp(tilt * tiltSensitivity, -1f, 1f) : c.knobX) * (r - knobR);
                 float ky = by + (tiltMode ? 0f : c.knobY) * (r - knobR);
-                fill.setColor(withAlpha(held ? 0xFFFF9A32 : 0xFF18232E, a * 200 / 255));
-                canvas.drawCircle(kx, ky, knobR, fill);
-                stroke.setColor(withAlpha(held ? 0xFFFFD18A : 0xFFFFFFFF, a * 220 / 255));
+                if (held) {
+                    fill.setColor(applyAlpha(COLOR_PRESSED, alpha));
+                    canvas.drawCircle(kx, ky, knobR, fill);
+                }
+                stroke.setColor(applyAlpha(held ? COLOR_PRESSED : COLOR_BORDER, alpha));
                 canvas.drawCircle(kx, ky, knobR, stroke);
                 label(canvas, tiltMode ? "TILT" : c.label, kx, ky + knobR * .35f, knobR * .72f, a);
                 break;
             }
             case DPAD: {
-                float armW = r * .65f;
-                float halfArm = armW * .5f;
-                float cr = armW * .28f;
-                fill.setColor(withAlpha(0xFF101820, a * 110 / 255));
-                stroke.setStrokeWidth(Math.max(2.5f, r * .04f));
-                stroke.setColor(withAlpha(0xFFFFFFFF, a * 190 / 255));
+                float arm = r * .36f;
+                float cr = 6.0f;
+                stroke.setStrokeWidth(2.0f);
+                stroke.setColor(applyAlpha(COLOR_BORDER, alpha));
 
-                rect.set(cx - halfArm, cy - r, cx + halfArm, cy + r);
-                canvas.drawRoundRect(rect, cr, cr, fill);
+                rect.set(cx - arm, cy - r, cx + arm, cy + r);
                 canvas.drawRoundRect(rect, cr, cr, stroke);
 
-                rect.set(cx - r, cy - halfArm, cx + r, cy + halfArm);
-                canvas.drawRoundRect(rect, cr, cr, fill);
+                rect.set(cx - r, cy - arm, cx + r, cy + arm);
                 canvas.drawRoundRect(rect, cr, cr, stroke);
-
-                rect.set(cx - halfArm + 2f, cy - halfArm + 2f, cx + halfArm - 2f, cy + halfArm - 2f);
-                canvas.drawRect(rect, fill);
 
                 if ((c.dpad & DPAD_UP) != 0) {
-                    fill.setColor(withAlpha(0xFFFF9A32, a * 200 / 255));
-                    rect.set(cx - halfArm, cy - r, cx + halfArm, cy - halfArm);
+                    fill.setColor(applyAlpha(COLOR_DPAD_PRESS, alpha));
+                    rect.set(cx - arm, cy - r, cx + arm, cy - arm);
                     canvas.drawRoundRect(rect, cr, cr, fill);
                 }
                 if ((c.dpad & DPAD_DOWN) != 0) {
-                    fill.setColor(withAlpha(0xFFFF9A32, a * 200 / 255));
-                    rect.set(cx - halfArm, cy + halfArm, cx + halfArm, cy + r);
+                    fill.setColor(applyAlpha(COLOR_DPAD_PRESS, alpha));
+                    rect.set(cx - arm, cy + arm, cx + arm, cy + r);
                     canvas.drawRoundRect(rect, cr, cr, fill);
                 }
                 if ((c.dpad & DPAD_LEFT) != 0) {
-                    fill.setColor(withAlpha(0xFFFF9A32, a * 200 / 255));
-                    rect.set(cx - r, cy - halfArm, cx - halfArm, cy + halfArm);
+                    fill.setColor(applyAlpha(COLOR_DPAD_PRESS, alpha));
+                    rect.set(cx - r, cy - arm, cx - arm, cy + arm);
                     canvas.drawRoundRect(rect, cr, cr, fill);
                 }
                 if ((c.dpad & DPAD_RIGHT) != 0) {
-                    fill.setColor(withAlpha(0xFFFF9A32, a * 200 / 255));
-                    rect.set(cx + halfArm, cy - halfArm, cx + r, cy + halfArm);
+                    fill.setColor(applyAlpha(COLOR_DPAD_PRESS, alpha));
+                    rect.set(cx + arm, cy - arm, cx + r, cy + arm);
                     canvas.drawRoundRect(rect, cr, cr, fill);
                 }
                 break;
@@ -724,23 +805,26 @@ public final class TouchControlsView extends View {
                 float hw = pillWidth(c) * .5f, hh = pillHeight(c) * .5f;
                 rect.set(cx - hw, cy - hh, cx + hw, cy + hh);
                 float corner = hh;
-                fill.setColor(withAlpha(c.pressed ? 0xFFFF9A32 : 0xFF101820, a * (c.pressed ? 220 : 130) / 255));
-                canvas.drawRoundRect(rect, corner, corner, fill);
-                stroke.setStrokeWidth(Math.max(2.5f, hh * .08f));
-                stroke.setColor(withAlpha(c.pressed ? 0xFFFFD18A : 0xFFFFFFFF, a * 220 / 255));
+                if (c.pressed) {
+                    fill.setColor(applyAlpha(COLOR_PRESSED, alpha));
+                    canvas.drawRoundRect(rect, corner, corner, fill);
+                }
+                stroke.setStrokeWidth(2.0f);
+                stroke.setColor(applyAlpha(c.pressed ? COLOR_PRESSED : COLOR_BORDER, alpha));
                 canvas.drawRoundRect(rect, corner, corner, stroke);
-                label(canvas, c.label, cx, cy + hh * .35f, hh * .60f, a);
+                label(canvas, c.label, cx, cy + hh * .35f, hh * .55f, a);
                 break;
             }
             default: {
-                fill.setColor(withAlpha(0xFF000000, a * 80 / 255));
-                canvas.drawCircle(cx, cy + r * .06f, r * 1.02f, fill);
-                fill.setColor(withAlpha(c.pressed ? 0xFFFF9A32 : 0xFF18232E, a * (c.pressed ? 220 : 130) / 255));
-                canvas.drawCircle(cx, cy, r, fill);
-                stroke.setStrokeWidth(Math.max(2.5f, r * .08f));
-                stroke.setColor(withAlpha(c.pressed ? 0xFFFFD18A : 0xFFFFFFFF, a * 220 / 255));
-                canvas.drawCircle(cx, cy, r - stroke.getStrokeWidth() * .5f, stroke);
-                label(canvas, c.label, cx, cy + r * .35f, r * .75f, a);
+                if (c.pressed) {
+                    fill.setColor(applyAlpha(COLOR_PRESSED, alpha));
+                    canvas.drawCircle(cx, cy, r, fill);
+                }
+                stroke.setStrokeWidth(2.0f);
+                stroke.setColor(applyAlpha(c.pressed ? COLOR_PRESSED : COLOR_BORDER, alpha));
+                canvas.drawCircle(cx, cy, r, stroke);
+                float textSize = (c.id.equals("l3") || c.id.equals("r3")) ? r * .65f : r * .75f;
+                label(canvas, c.label, cx, cy + r * .35f, textSize, a);
                 break;
             }
         }

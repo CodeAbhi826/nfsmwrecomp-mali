@@ -382,9 +382,10 @@ public final class MainActivity extends Activity {
         card.addView(heading("Scaling to the screen"));
         card.addView(bodyText("How the game image scales to your phone's display.", 10.5f, TEXT_MUTED));
         RadioGroupHelper scaleGroup = new RadioGroupHelper();
-        card.addView(scaleGroup.createItem("Bilinear (standard)", true, () -> {}));
-        card.addView(scaleGroup.createItem("AMD FSR 1.0 - sharper upscaling", false, () -> {}));
-        card.addView(scaleGroup.createItem("AMD CAS - sharpening only", false, () -> {}));
+        String curScale = GameOptions.get(this, GameOptions.PRESENT_EFFECT);
+        card.addView(scaleGroup.createItem("Bilinear (standard)", "bilinear".equals(curScale), () -> GameOptions.set(this, GameOptions.PRESENT_EFFECT, "bilinear")));
+        card.addView(scaleGroup.createItem("AMD FSR 1.0 - sharper upscaling", "fsr".equals(curScale), () -> GameOptions.set(this, GameOptions.PRESENT_EFFECT, "fsr")));
+        card.addView(scaleGroup.createItem("AMD CAS - sharpening only", "cas".equals(curScale), () -> GameOptions.set(this, GameOptions.PRESENT_EFFECT, "cas")));
 
         // Anisotropic filtering
         card.addView(heading("Anisotropic filtering"));
@@ -403,14 +404,6 @@ public final class MainActivity extends Activity {
         String curSh = GameOptions.get(this, GameOptions.SHADOWS);
         card.addView(shGroup.createItem("Every frame", !"2".equals(curSh), () -> GameOptions.set(this, GameOptions.SHADOWS, "1")));
         card.addView(shGroup.createItem("Every 2 frames", "2".equals(curSh), () -> GameOptions.set(this, GameOptions.SHADOWS, "2")));
-
-        // Shadow distance
-        card.addView(heading("Shadow distance"));
-        card.addView(bodyText("Distance at which dynamic world objects cast shadows.", 10.5f, TEXT_MUTED));
-        RadioGroupHelper distGroup = new RadioGroupHelper();
-        card.addView(distGroup.createItem("Far (Xbox 360 default)", true, () -> {}));
-        card.addView(distGroup.createItem("Medium", false, () -> {}));
-        card.addView(distGroup.createItem("Near - faster", false, () -> {}));
 
         // Car reflections
         card.addView(heading("Car reflections"));
@@ -436,20 +429,6 @@ public final class MainActivity extends Activity {
         card.addView(skyGroup.createItem("Original (Xbox 360)", "original".equals(curSky), () -> GameOptions.set(this, GameOptions.SKY, "original")));
         card.addView(skyGroup.createItem("Soft", "suave".equals(curSky), () -> GameOptions.set(this, GameOptions.SKY, "suave")));
 
-        // Color filter
-        card.addView(heading("Game colour filter"));
-        card.addView(bodyText("Rockport iconic warm yellow/sepia cinematic grading.", 10.5f, TEXT_MUTED));
-        RadioGroupHelper filterGroup = new RadioGroupHelper();
-        card.addView(filterGroup.createItem("Original", true, () -> {}));
-        card.addView(filterGroup.createItem("Half", false, () -> {}));
-        card.addView(filterGroup.createItem("Off", false, () -> {}));
-
-        // Speed blur
-        card.addView(switchRow("Speed blur",
-                "Motion blur streaks and camera shake at high speeds.",
-                ctrl.getBoolean("motion_blur", true),
-                (btn, on) -> ctrl.edit().putBoolean("motion_blur", on).apply()));
-
         // Image filter
         card.addView(heading("Image filter"));
         card.addView(bodyText("Optional post-processing filter presets.", 10.5f, TEXT_MUTED));
@@ -468,10 +447,21 @@ public final class MainActivity extends Activity {
         card.addView(cardTitle("Sound"));
         card.addView(goldLine());
 
-        card.addView(switchRow("Sound through Audio",
-                "Thicker, louder engine acoustics and deeper bass response.",
-                ctrl.getBoolean("audio_boost", true),
-                (btn, on) -> ctrl.edit().putBoolean("audio_boost", on).apply()));
+        card.addView(heading("Game Master Volume"));
+        card.addView(bodyText("Acoustic gain multiplier for engine, speech, and sound effects.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper volGroup = new RadioGroupHelper();
+        String curVol = GameOptions.get(this, "volume");
+        card.addView(volGroup.createItem("100% (Normal)", "100".equals(curVol) || curVol.isEmpty(), () -> GameOptions.set(this, "volume", "100")));
+        card.addView(volGroup.createItem("125% (High)", "125".equals(curVol), () -> GameOptions.set(this, "volume", "125")));
+        card.addView(volGroup.createItem("150% (Very high)", "150".equals(curVol), () -> GameOptions.set(this, "volume", "150")));
+        card.addView(volGroup.createItem("200% (Maximum)", "200".equals(curVol), () -> GameOptions.set(this, "volume", "200")));
+
+        card.addView(heading("Audio Buffer Latency"));
+        card.addView(bodyText("Buffer queue size. Use 107 ms if experiencing sound crackling on low-end devices.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper bufGroup = new RadioGroupHelper();
+        String curBuf = GameOptions.get(this, "audio_buffer");
+        card.addView(bufGroup.createItem("64 ms (Low Latency / Responsive)", !"20".equals(curBuf), () -> GameOptions.set(this, "audio_buffer", "12")));
+        card.addView(bufGroup.createItem("107 ms (Large Buffer / Stable)", "20".equals(curBuf), () -> GameOptions.set(this, "audio_buffer", "20")));
 
         return card;
     }
@@ -481,11 +471,6 @@ public final class MainActivity extends Activity {
         LinearLayout card = createCard();
         card.addView(cardTitle("Performance"));
         card.addView(goldLine());
-
-        card.addView(switchRow("Pin threads to cores",
-                "Pins game worker threads to fast CPU cores to reduce frame pacing jitter.",
-                ctrl.getBoolean("pin_threads", true),
-                (btn, on) -> ctrl.edit().putBoolean("pin_threads", on).apply()));
 
         card.addView(heading("GPU driver"));
         RadioGroupHelper driverGroup = new RadioGroupHelper();
@@ -524,11 +509,6 @@ public final class MainActivity extends Activity {
         lp2.leftMargin = dp(4);
         btnRow.addView(btnDelete, lp2);
         card.addView(btnRow);
-
-        card.addView(switchRow("CPU turbo",
-                "Requests aggressive CPU frequency scaling for high performance.",
-                ctrl.getBoolean("cpu_turbo", false),
-                (btn, on) -> ctrl.edit().putBoolean("cpu_turbo", on).apply()));
 
         return card;
     }

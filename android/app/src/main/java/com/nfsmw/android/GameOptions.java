@@ -72,6 +72,7 @@ final class GameOptions {
     static final String ROAD_REFLECTION = "road_reflection";
     static final String SKY = "sky";
     static final String FILTER = "filter";
+    static final String PRESENT_EFFECT = "present_effect";
 
     static final Option[] GRAPHICS = {
             new Option(RENDERER, "GPU Plugin / Renderer", "nfsmw_renderizador", "nativo",
@@ -94,6 +95,10 @@ final class GameOptions {
                     new String[] {"apagado", "fxaa"},
                     new String[] {"Disabled (none)", "FXAA"},
                     new String[] {"Off", "FXAA"}),
+            new Option(PRESENT_EFFECT, "Screen Scaling Blitter", "present_effect", "bilinear",
+                    new String[] {"bilinear", "fsr", "cas"},
+                    new String[] {"Bilinear (standard)", "AMD FSR 1.0 - sharper upscaling", "AMD CAS - sharpening only"},
+                    new String[] {"Bilinear", "AMD FSR", "AMD CAS"}),
             new Option(ANISOTROPIC, "Anisotropic Filtering", "anisotropic_override", "0",
                     new String[] {"0", "2", "4", "8", "16"},
                     new String[] {"Disabled (0x)", "2x", "4x", "8x", "16x"},
@@ -251,7 +256,7 @@ final class GameOptions {
         SharedPreferences controls = context.getSharedPreferences("nfsmw_controls", Context.MODE_PRIVATE);
         boolean stretch = controls.getBoolean("stretch", true);
         sb.append("present_letterbox = ").append(!stretch).append("\n");
-        sb.append("present_effect = \"bilinear\"\n");
+        sb.append("present_effect = \"").append(get(context, PRESENT_EFFECT)).append("\"\n");
         sb.append("swap_post_effect = \"").append(get(context, AA).equals("apagado") ? "none" : get(context, AA)).append("\"\n");
         sb.append("vsync = ").append(controls.getBoolean("vsync", true)).append("\n");
         sb.append("async_shader_compilation = ").append(controls.getBoolean("async_shaders", true)).append("\n");

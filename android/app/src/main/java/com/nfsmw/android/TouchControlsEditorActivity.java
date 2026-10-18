@@ -32,7 +32,7 @@ public final class TouchControlsEditorActivity extends Activity {
     private TextView lblSize;
     private Button btnMode;
     private int presetIndex = 0;
-    private static final String[] PRESET_NAMES = {"CONTROLS: NORMAL", "CONTROLS: COMPACT", "CONTROLS: RACING"};
+    private static final String[] PRESET_NAMES = {"CONTROLS: DEFAULT", "CONTROLS: COMPACT"};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -163,9 +163,7 @@ public final class TouchControlsEditorActivity extends Activity {
     private void applyPreset(int index) {
         controlsView.resetLayout();
         if (index == 1) { // COMPACT
-            controlsView.resizeSelected(0.85f);
-        } else if (index == 2) { // RACING (Pedals larger)
-            // Default pedals already calibrated for racing
+            controlsView.resizeAll(0.85f);
         }
         updateLabels();
         Toast.makeText(this, "Preset applied: " + PRESET_NAMES[index], Toast.LENGTH_SHORT).show();
