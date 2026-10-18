@@ -42,9 +42,6 @@ public final class TouchControlsView extends View {
     private float currentMs = 16.6f;
     boolean showFps = false;
 
-    static native void nativeSetTouchState(int buttons, int leftX, int leftY, int rightX, int rightY,
-                                           int leftTrigger, int rightTrigger);
-
     /** One control of the pad. */
     static final class Control {
         final String id;
@@ -662,11 +659,15 @@ public final class TouchControlsView extends View {
         lastRY = ry;
         lastLT = lt;
         lastRT = rt;
-        try {
-            nativeSetTouchState(buttons, lx, ly, rx, ry, lt, rt);
-        } catch (UnsatisfiedLinkError ignored) {
-            // Native game library is only loaded during GameActivity
-        }
+        io.github.nfsmwrecomp.TouchControllerBridge.trySetState(
+                buttons,
+                clamp(lx / 32767f, -1f, 1f),
+                clamp(ly / 32767f, -1f, 1f),
+                clamp(rx / 32767f, -1f, 1f),
+                clamp(ry / 32767f, -1f, 1f),
+                clamp(lt / 255f, 0f, 1f),
+                clamp(rt / 255f, 0f, 1f)
+        );
         invalidate();
     }
 
@@ -718,17 +719,24 @@ public final class TouchControlsView extends View {
     }
 
     private void drawFpsCounter(Canvas canvas) {
-        long now = System.nanoTime();
-        frameCount++;
-        if (lastFpsTime == 0) {
-            lastFpsTime = now;
+        float nativeFps = io.github.nfsmwrecomp.GameActivity.tryGetFps();
+        float nativeMs = io.github.nfsmwrecomp.GameActivity.tryGetMs();
+        if (nativeFps > 0.0f) {
+            currentFps = nativeFps;
+            currentMs = nativeMs > 0.0f ? nativeMs : (1000f / Math.max(1f, currentFps));
         } else {
-            long elapsedNs = now - lastFpsTime;
-            if (elapsedNs >= 500_000_000L) {
-                currentFps = (frameCount * 1_000_000_000f) / elapsedNs;
-                currentMs = 1000f / Math.max(1f, currentFps);
-                frameCount = 0;
+            long now = System.nanoTime();
+            frameCount++;
+            if (lastFpsTime == 0) {
                 lastFpsTime = now;
+            } else {
+                long elapsedNs = now - lastFpsTime;
+                if (elapsedNs >= 500_000_000L) {
+                    currentFps = (frameCount * 1_000_000_000f) / elapsedNs;
+                    currentMs = 1000f / Math.max(1f, currentFps);
+                    frameCount = 0;
+                    lastFpsTime = now;
+                }
             }
         }
         String fpsText = String.format(java.util.Locale.US, "%.0f fps  %.1f ms", currentFps, currentMs);
@@ -741,7 +749,7 @@ public final class TouchControlsView extends View {
         fill.setColor(0x88000000);
         canvas.drawRoundRect(rect, 8f, 8f, fill);
         canvas.drawText(fpsText, rect.centerX(), rect.centerY() + text.getTextSize() * 0.35f, text);
-        postInvalidateDelayed(100);
+        postInvalidateDelayed(250);
     }
 
     private void drawControl(Canvas canvas, Control c, float alpha) {

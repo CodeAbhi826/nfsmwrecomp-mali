@@ -155,8 +155,8 @@ public final class GameActivity extends SDLActivity
     private static void applyStretch(boolean stretch) {
         try {
             nativeSetStretch(stretch);
-        } catch (UnsatisfiedLinkError e) {
-            Log.w(TAG, "libmain not loaded", e);
+        } catch (UnsatisfiedLinkError ignored) {
+            // Stretch cvars are passed via getArguments()
         }
     }
 

@@ -146,11 +146,11 @@ final class GameOptions {
                     new String[] {"12", "20"},
                     new String[] {"Normal (64 ms)", "Large (107 ms, if crackling)"},
                     new String[] {"64 ms", "107 ms"}),
-            new Option("language", "In-Game Language", "nfsmw_idioma", "-1",
-                    new String[] {"-1", "0", "4", "1", "2", "3", "5", "6", "7", "12", "13"},
-                    new String[] {"Game Edition Default", "English", "Español", "Français", "Deutsch", "Italiano",
+            new Option("language", "In-Game Language", "nfsmw_idioma", "0",
+                    new String[] {"0", "-1", "4", "1", "2", "3", "5", "6", "7", "12", "13"},
+                    new String[] {"English (Default)", "Game Edition Default", "Español", "Français", "Deutsch", "Italiano",
                             "Nederlands", "Svenska", "Dansk", "Polski", "Suomi"},
-                    new String[] {"Default", "English", "Español", "Français", "Deutsch", "Italiano",
+                    new String[] {"English", "Default", "Español", "Français", "Deutsch", "Italiano",
                             "Nederlands", "Svenska", "Dansk", "Polski", "Suomi"}),
     };
 
