@@ -62,16 +62,19 @@ public final class TouchControlsEditorActivity extends Activity {
         root.addView(controlsView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-        // Top Toolbar
+        // Top Toolbar - Centered exactly in the middle clearing LT/LB
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.VERTICAL);
         toolbar.setGravity(Gravity.CENTER_HORIZONTAL);
-        toolbar.setPadding(0, dp(10), 0, 0);
+        toolbar.setPadding(0, dp(14), 0, 0);
 
-        // Row 1: Size & Opacity Adjusters
+        // Row 1: Size & Opacity Adjusters (Centered together)
         LinearLayout row1 = new LinearLayout(this);
         row1.setOrientation(LinearLayout.HORIZONTAL);
-        row1.setGravity(Gravity.CENTER_VERTICAL);
+        row1.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams row1Lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        row1.setLayoutParams(row1Lp);
 
         row1.addView(createPillButton("-", () -> {
             controlsView.resizeSelected(0.9f);
@@ -85,7 +88,7 @@ public final class TouchControlsEditorActivity extends Activity {
         }));
 
         View spacer = new View(this);
-        row1.addView(spacer, new LinearLayout.LayoutParams(dp(16), dp(1)));
+        row1.addView(spacer, new LinearLayout.LayoutParams(dp(20), dp(1)));
 
         row1.addView(createPillButton("-", () -> {
             controlsView.opacity = Math.max(0.1f, controlsView.opacity - 0.1f);
@@ -102,13 +105,13 @@ public final class TouchControlsEditorActivity extends Activity {
 
         toolbar.addView(row1);
 
-        // Row 2: Mode, Reset, Cancel, Done
+        // Row 2: Mode, Reset, Cancel, Done (Centered right below Row 1)
         LinearLayout row2 = new LinearLayout(this);
         row2.setOrientation(LinearLayout.HORIZONTAL);
-        row2.setGravity(Gravity.CENTER_VERTICAL);
+        row2.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams row2Lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        row2Lp.topMargin = dp(6);
+        row2Lp.topMargin = dp(8);
         row2.setLayoutParams(row2Lp);
 
         btnMode = createActionButton(PRESET_NAMES[0], () -> {
@@ -151,11 +154,12 @@ public final class TouchControlsEditorActivity extends Activity {
         hint.setBackground(hintBg);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        hintLp.topMargin = dp(4);
+        hintLp.topMargin = dp(6);
         toolbar.addView(hint, hintLp);
 
-        root.addView(toolbar, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
+        FrameLayout.LayoutParams toolbarLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        root.addView(toolbar, toolbarLp);
 
         setContentView(root);
     }
