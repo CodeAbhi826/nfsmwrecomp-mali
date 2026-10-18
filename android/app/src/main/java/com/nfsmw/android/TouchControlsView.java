@@ -548,7 +548,11 @@ public final class TouchControlsView extends View {
         lastRY = ry;
         lastLT = lt;
         lastRT = rt;
-        nativeSetTouchState(buttons, lx, ly, rx, ry, lt, rt);
+        try {
+            nativeSetTouchState(buttons, lx, ly, rx, ry, lt, rt);
+        } catch (UnsatisfiedLinkError ignored) {
+            // Native game library is only loaded during GameActivity
+        }
         invalidate();
     }
 
