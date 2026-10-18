@@ -95,15 +95,19 @@ def main():
                     kept += 1
                     continue
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
-                if resolved_target is not None:
-                    shutil.copy2(resolved_target, dst)
-                    if was_existing:
-                        kept += 1
+                try:
+                    if resolved_target is not None:
+                        shutil.copy2(resolved_target, dst)
+                        if was_existing:
+                            kept += 1
+                        else:
+                            copied += 1
                     else:
+                        shutil.copy2(src, dst)
                         copied += 1
-                else:
-                    shutil.copy2(src, dst)
-                    copied += 1
+                except (FileNotFoundError, OSError) as e:
+                    # Safely skip unresolvable optional symlinks (e.g. MoltenVK on Linux/Android)
+                    pass
         print(f'{copied} files copied into sdk/thirdparty, {kept} files of this port kept')
     finally:
         if sys.version_info >= (3, 12):
