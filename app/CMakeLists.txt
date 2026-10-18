@@ -13,6 +13,7 @@ include(generated/rexglue.cmake)
 # Sources
 set(NFSMW_SOURCES
     src/main.cpp
+    generated/default/nfsmw_init.cpp
     # Phase A of the native renderer: wraps the game's Direct3D to confirm that each
     # address is the function we think it is. It does not change drawing; it only writes rex_d3d.log.
     src/nfsmw_d3d_trace.cpp
