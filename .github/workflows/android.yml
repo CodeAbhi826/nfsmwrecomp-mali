@@ -18,6 +18,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Fetch SDL3 Java Sources
+        run: |
+          mkdir -p sdk/thirdparty
+          git clone --depth 1 --branch preview-3.1.6 https://github.com/libsdl-org/SDL.git sdk/thirdparty/sdl3
+
       - name: Fetch Precompiled Native Core Libraries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
