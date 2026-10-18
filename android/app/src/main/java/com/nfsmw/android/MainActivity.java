@@ -75,7 +75,7 @@ public final class MainActivity extends Activity {
                 pendingGithub = state.getBoolean("pending_github");
             }
         }
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
                 View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN |
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
@@ -104,55 +104,49 @@ public final class MainActivity extends Activity {
 
     private static final int ACCENT = 0xFFFF8A00;
     private LinearLayout checksList;
+    private LinearLayout driverList;
     private LinearLayout optionsList;
+    private LinearLayout audioList;
     private LinearLayout shaderPanel;
     private ProgressBar shaderProgress;
     private TextView shaderText;
     private ShaderBuilder shaderBuilder;
 
     private View buildScreen() {
-        FrameLayout screen = new FrameLayout(this);
-        screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0xFF0B0F14, 0xFF1C1407, 0xFF0B0F14}));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {0xFF0C1014, 0xFF14140D, 0xFF0C1014}));
 
-        LinearLayout columns = new LinearLayout(this);
-        columns.setOrientation(LinearLayout.HORIZONTAL);
-        columns.setPadding(dp(28), dp(16), dp(28), dp(16));
-        screen.addView(columns, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(24), dp(20), dp(36));
+        scroll.addView(content, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
 
-        // Left: logo, game files and the two actions.
-        LinearLayout left = new LinearLayout(this);
-        left.setOrientation(LinearLayout.VERTICAL);
-        left.setGravity(Gravity.CENTER_HORIZONTAL);
-        ScrollView leftScroll = new ScrollView(this);
-        leftScroll.setFillViewport(true);
-        leftScroll.addView(left);
-        columns.addView(leftScroll, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.1f));
-
+        // Header: authentic banner & title
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.banner);
         logo.setAdjustViewBounds(true);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        left.addView(logo, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(92)));
+        content.addView(logo, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(80)));
 
-        TextView subtitle = label("Xbox 360 · ARM64 Native Recompilation", 13, 0x99FFFFFF, false);
+        TextView subtitle = label("Xbox 360 · ARM64 Mali Edition", 13, 0x99FFFFFF, false);
         subtitle.setGravity(Gravity.CENTER);
-        left.addView(subtitle, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        subtitle.setPadding(0, dp(4), 0, dp(12));
+        content.addView(subtitle);
 
-        LinearLayout card = card();
-        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        cardParams.topMargin = dp(12);
-        left.addView(card, cardParams);
-        card.addView(label("GAME FILES", 12, ACCENT, true));
+        // Card 1: Game Files
+        LinearLayout gameCard = card();
+        content.addView(gameCard, marginBox(10));
+        gameCard.addView(sectionHeader("GAME FILES"));
         importStatus = label("", 13, 0xDDFFFFFF, false);
-        importStatus.setPadding(0, dp(4), 0, dp(6));
-        card.addView(importStatus);
+        importStatus.setPadding(0, dp(2), 0, dp(6));
+        gameCard.addView(importStatus);
         checksList = new LinearLayout(this);
         checksList.setOrientation(LinearLayout.VERTICAL);
-        card.addView(checksList);
+        gameCard.addView(checksList);
+
         shaderPanel = new LinearLayout(this);
         shaderPanel.setOrientation(LinearLayout.VERTICAL);
         shaderPanel.setPadding(0, dp(8), 0, 0);
@@ -164,46 +158,75 @@ public final class MainActivity extends Activity {
         shaderProgress.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
         shaderPanel.addView(shaderProgress, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(10)));
-        card.addView(shaderPanel);
-
-        launchGame = actionButton("PLAY", true);
-        launchGame.setVisibility(View.GONE);
-        launchGame.setOnClickListener(view -> play());
-        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(62));
-        playParams.topMargin = dp(12);
-        left.addView(launchGame, playParams);
+        gameCard.addView(shaderPanel);
 
         selectFolder = actionButton("Select Game Folder", false);
         selectFolder.setOnClickListener(view -> selectGameFolder());
         LinearLayout.LayoutParams folderParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(46));
         folderParams.topMargin = dp(10);
-        left.addView(selectFolder, folderParams);
+        gameCard.addView(selectFolder, folderParams);
 
-        // Right: graphics options.
-        LinearLayout right = card();
-        LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
-        rightParams.leftMargin = dp(24);
-        columns.addView(right, rightParams);
-        right.addView(label("GRAPHICS & SETTINGS", 12, ACCENT, true));
-        TextView note = label("Applied when launching the game.", 12, 0x88FFFFFF, false);
-        note.setPadding(0, dp(2), 0, dp(4));
-        right.addView(note);
-        ScrollView scroll = new ScrollView(this);
+        // Hero PLAY Button
+        launchGame = actionButton("▶   PLAY", true);
+        launchGame.setVisibility(View.GONE);
+        launchGame.setOnClickListener(view -> play());
+        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(58));
+        playParams.topMargin = dp(14);
+        content.addView(launchGame, playParams);
+
+        // Card 2: GPU Driver (Dedicated Mali setup)
+        LinearLayout driverCard = card();
+        content.addView(driverCard, marginBox(14));
+        driverCard.addView(sectionHeader("GPU & DRIVER"));
+        driverList = new LinearLayout(this);
+        driverList.setOrientation(LinearLayout.VERTICAL);
+        driverCard.addView(driverList);
+
+        // Card 3: Graphics & Performance Settings
+        LinearLayout graphicsCard = card();
+        content.addView(graphicsCard, marginBox(14));
+        graphicsCard.addView(sectionHeader("GRAPHICS & PERFORMANCE"));
         optionsList = new LinearLayout(this);
         optionsList.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(optionsList);
-        right.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        graphicsCard.addView(optionsList);
+
+        // Card 4: Audio & System Settings
+        LinearLayout audioCard = card();
+        content.addView(audioCard, marginBox(14));
+        audioCard.addView(sectionHeader("AUDIO & SYSTEM"));
+        audioList = new LinearLayout(this);
+        audioList.setOrientation(LinearLayout.VERTICAL);
+        audioCard.addView(audioList);
+
+        // Card 5: Diagnostics & Logs
+        LinearLayout diagCard = card();
+        content.addView(diagCard, marginBox(14));
+        diagCard.addView(sectionHeader("DIAGNOSTICS & LOGS"));
+        TextView diagDesc = label("Export system state, device GPU probe, and full live logs for debugging.", 12, 0x88FFFFFF, false);
+        diagDesc.setPadding(0, dp(2), 0, dp(8));
+        diagCard.addView(diagDesc);
         sendReport = actionButton("Share Crash Report / Logs", false);
         sendReport.setOnClickListener(view -> chooseReportDestination());
-        LinearLayout.LayoutParams reportParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
-        reportParams.topMargin = dp(8);
-        right.addView(sendReport, reportParams);
+        diagCard.addView(sendReport, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
+
         refreshOptions();
-        return screen;
+        return scroll;
+    }
+
+    private LinearLayout.LayoutParams marginBox(int topMarginDp) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(topMarginDp);
+        return lp;
+    }
+
+    private TextView sectionHeader(String title) {
+        TextView t = label(title, 12, ACCENT, true);
+        t.setPadding(0, 0, 0, dp(6));
+        return t;
     }
 
     // ---- Shader library ------------------------------------------------------------------------------------
@@ -426,51 +449,91 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshOptions() {
-        optionsList.removeAllViews();
-        GpuDrivers.Driver driver = GpuDrivers.selected(this);
-        optionsList.addView(optionRow("Vulkan Driver", driver == null ? "System Driver" : driver.name,
-                this::chooseDriver));
-        optionsList.addView(optionRow("Probe Driver", "Verify GPU and Vulkan extensions", () -> probeDriver(false)));
-        for (GameOptions.Option option : GameOptions.ALL) {
-            String value = GameOptions.get(this, option.key);
-            optionsList.addView(optionRow(option.title, option.label(value), () -> chooseOption(option)));
+        if (driverList != null) {
+            driverList.removeAllViews();
+            GpuDrivers.Driver driver = GpuDrivers.selected(this);
+            String driverName = driver == null ? "System Driver (Mali G71 HAL)" : driver.name;
+            driverList.addView(optionRow("Vulkan Driver", "Hardware driver or compatibility shim", driverName, this::chooseDriver));
+            driverList.addView(optionRow("Probe Driver", "Verify GPU extensions and descriptor limits", "Run Probe", () -> probeDriver(false)));
         }
-        SharedPreferences controls = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
-        boolean stretch = controls.getBoolean("stretch", true);
-        optionsList.addView(optionRow("Aspect Ratio",
-                stretch ? "Stretch to Fullscreen" : "Original 16:9", () -> {
-                    controls.edit().putBoolean("stretch", !stretch).apply();
-                    refreshOptions();
-                }));
+        if (optionsList != null) {
+            optionsList.removeAllViews();
+            for (GameOptions.Option option : GameOptions.GRAPHICS) {
+                String value = GameOptions.get(this, option.key);
+                optionsList.addView(optionRow(option.title, optionSummary(option.key), option.label(value), () -> chooseOption(option)));
+            }
+            SharedPreferences controls = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
+            boolean stretch = controls.getBoolean("stretch", true);
+            optionsList.addView(optionRow("Aspect Ratio", "Display scaling mode",
+                    stretch ? "Stretch to Fullscreen" : "Original 16:9", () -> {
+                        controls.edit().putBoolean("stretch", !stretch).apply();
+                        refreshOptions();
+                    }));
+        }
+        if (audioList != null) {
+            audioList.removeAllViews();
+            for (GameOptions.Option option : GameOptions.AUDIO_SYSTEM) {
+                String value = GameOptions.get(this, option.key);
+                audioList.addView(optionRow(option.title, optionSummary(option.key), option.label(value), () -> chooseOption(option)));
+            }
+        }
+    }
+
+    private static String optionSummary(String key) {
+        switch (key) {
+            case GameOptions.RENDERER: return "Native Vulkan pipeline vs Compatibility mode";
+            case "gpu_stability": return "Mali occlusions & sun flare stability";
+            case GameOptions.RESOLUTION: return "Internal rendering resolution";
+            case GameOptions.FPS: return "Target framerate cap";
+            case "aa": return "Edge antialiasing filter";
+            case "shadows": return "Shadow calculation frequency";
+            case "car_reflections": return "Vehicle cubemap reflection detail";
+            case "road_reflection": return "Wet road surface reflections";
+            case "sky": return "Atmospheric sky shader glow";
+            case "filter": return "Post-processing color grade";
+            case "volume": return "Game audio master volume";
+            case "audio_buffer": return "Audio queue buffer latency";
+            case "language": return "In-game text and subtitles language";
+            default: return "";
+        }
     }
 
     private void chooseDriver() {
+        GpuDrivers.ensureDefaultDrivers(this);
         java.util.List<GpuDrivers.Driver> drivers = GpuDrivers.list(this);
         String[] names = new String[drivers.size() + 1];
-        names[0] = "System Driver";
+        names[0] = "System Driver (Mali G71 HAL)";
         int selected = 0;
         for (int i = 0; i < drivers.size(); ++i) {
             names[i + 1] = drivers.get(i).name;
             if (drivers.get(i).id.equals(GpuDrivers.selectedId(this))) selected = i + 1;
         }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Vulkan Driver")
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Select Vulkan Driver")
                 .setSingleChoiceItems(names, selected, (dialog, which) -> {
                     GpuDrivers.select(this, which == 0 ? "" : drivers.get(which - 1).id);
-                    refreshOptions(); dialog.dismiss();
+                    refreshOptions();
+                    dialog.dismiss();
                 })
-                .setPositiveButton("Import ZIP", (dialog, which) -> {
+                .setPositiveButton("Import Driver (.zip)", (dialog, which) -> {
                     Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
                             .addCategory(Intent.CATEGORY_OPENABLE);
                     startActivityForResult(picker, REQUEST_DRIVER_ZIP);
                 })
-                .setNeutralButton("Delete Selected", (dialog, which) -> {
-                    GpuDrivers.Driver driver = GpuDrivers.selected(this);
-                    if (driver == null) return;
-                    try { GpuDrivers.remove(this, driver); refreshOptions(); }
-                    catch (IOException error) { reportError(error.getMessage()); }
-                })
-                .setNegativeButton("Cancel", null).show();
+                .setNegativeButton("Cancel", null);
+        if (selected > 0) {
+            builder.setNeutralButton("Delete Selected", (dialog, which) -> {
+                GpuDrivers.Driver driver = GpuDrivers.selected(this);
+                if (driver == null) return;
+                try {
+                    GpuDrivers.remove(this, driver);
+                    refreshOptions();
+                } catch (IOException error) {
+                    reportError(error.getMessage());
+                }
+            });
+        }
+        builder.show();
     }
 
     private void probeDriver(boolean playAfter) {
@@ -518,22 +581,34 @@ public final class MainActivity extends Activity {
                 .show();
     }
 
-    private View optionRow(String title, String value, Runnable onClick) {
+    private View optionRow(String title, String summary, String value, Runnable onClick) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        row.setPadding(dp(14), dp(10), dp(14), dp(10));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x14FFFFFF);
         bg.setCornerRadius(dp(10));
         row.setBackground(bg);
         row.setClickable(true);
+        row.setFocusable(true);
         row.setOnClickListener(v -> onClick.run());
-        row.addView(label(title, 14, 0xFFFFFFFF, false),
-                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        LinearLayout textCol = new LinearLayout(this);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        textCol.addView(label(title, 14, 0xFFFFFFFF, true));
+        if (summary != null && !summary.isEmpty()) {
+            TextView sub = label(summary, 12, 0x88FFFFFF, false);
+            sub.setPadding(0, dp(2), 0, 0);
+            textCol.addView(sub);
+        }
+        row.addView(textCol, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
         TextView current = label(value + "  ›", 13, ACCENT, true);
         current.setGravity(Gravity.END);
+        current.setPadding(dp(8), 0, 0, 0);
         row.addView(current);
+
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(6);

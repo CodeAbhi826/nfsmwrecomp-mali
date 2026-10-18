@@ -21,7 +21,20 @@ final class GpuDrivers {
     private static File root(Context context) {
         File root = new File(context.getFilesDir(), "gpu_drivers"); root.mkdirs(); return root;
     }
+    static void ensureDefaultDrivers(Context context) {
+        File targetDir = new File(root(context), "malicompat-g71");
+        File driverJson = new File(targetDir, "driver.json");
+        File lib = new File(targetDir, "payload/libmalicompat.so");
+        if (driverJson.isFile() && lib.isFile()) return;
+        try (InputStream is = context.getAssets().open("drivers/malicompat-g71.zip")) {
+            targetDir.mkdirs();
+            DriverArchive.extract(is, targetDir);
+            readOnly(targetDir);
+        } catch (Exception ignored) {
+        }
+    }
     static List<Driver> list(Context context) {
+        ensureDefaultDrivers(context);
         List<Driver> result = new ArrayList<>();
         File[] dirs = root(context).listFiles(File::isDirectory);
         if (dirs != null) for (File dir : dirs) {
@@ -52,7 +65,7 @@ final class GpuDrivers {
         Diagnostics.invalidateGpu();
     }
     static String key(Context context) {
-        return selectedId(context) + ":" + Build.FINGERPRINT + ":" + ReleaseUpdates.installed(context);
+        return selectedId(context) + ":" + Build.FINGERPRINT;
     }
     static Driver importZip(Context context, Uri uri) throws Exception {
         if (Build.VERSION.SDK_INT < 28) throw new IOException("Custom drivers require Android 9 or later.");

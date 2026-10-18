@@ -43,6 +43,7 @@ shaders/wasm/out/
 *.dex
 *.apk
 *.zip
+!android/app/src/main/assets/drivers/*.zip
 build_work/
 dist/
 reports/

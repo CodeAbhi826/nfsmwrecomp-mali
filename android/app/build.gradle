@@ -14,8 +14,8 @@ android {
         applicationId 'io.github.nfsmwrecomp'
         minSdk 26
         targetSdk 35
-        versionCode 13
-        versionName '0.6.0'
+        versionCode 100
+        versionName '1.0.0-mali'
         ndk {
             abiFilters 'arm64-v8a'
         }
