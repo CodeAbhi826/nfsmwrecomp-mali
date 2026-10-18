@@ -18,23 +18,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Licenses and Install SDK/NDK
+      - name: Fetch Precompiled Native Core Libraries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --licenses || true
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
-          mkdir -p "$ANDROID_HOME/cmake/3.30.5/bin"
-          ln -sf "$(which cmake)" "$ANDROID_HOME/cmake/3.30.5/bin/cmake"
-          ln -sf "$(which ninja)" "$ANDROID_HOME/cmake/3.30.5/bin/ninja"
-
-      - name: Fetch ReXGlue Third-Party Dependencies
-        run: python3 tools/fetch_thirdparty.py
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          gh release download v0.6.0 --repo codepdbh/nfsmw-android --pattern "*.apk" --dir /tmp/base_apk
+          unzip -j /tmp/base_apk/*.apk "lib/arm64-v8a/*" -d android/app/src/main/jniLibs/arm64-v8a/
+          ls -la android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Build ARM64 Debug APK
         working-directory: android
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
