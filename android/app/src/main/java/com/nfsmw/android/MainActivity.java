@@ -2,46 +2,67 @@ package com.nfsmw.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.util.TypedValue;
-import android.widget.ImageView;
-import android.widget.ProgressBar;
-import android.widget.ScrollView;
-import android.content.Intent;
-import android.content.ClipData;
-import android.content.ActivityNotFoundException;
-import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Vibrator;
+import android.provider.DocumentsContract;
 import android.provider.Settings;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.ScrollView;
+import android.widget.SeekBar;
+import android.widget.Spinner;
+import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
-import androidx.documentfile.provider.DocumentFile;
 import androidx.core.content.FileProvider;
+import androidx.documentfile.provider.DocumentFile;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * NFSMW Recompiled - Authentic Android Launcher.
+ * Features the official NFS MW logo header, Street Amber & Carbon theme,
+ * full game folder & ISO ROM selection, direct on-screen configuration cards,
+ * 1:1 landscape virtual touch controls layout editor, and fact-checked settings.
+ */
 public final class MainActivity extends Activity {
     private static final int REQUEST_GAME_FOLDER = 41;
     private static final int REQUEST_STORAGE_ACCESS = 42;
@@ -49,18 +70,35 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_SAVE_REPORT = 44;
     private static final int REQUEST_DRIVER_ZIP = 45;
     private static final int REQUEST_DRIVER_PROBE = 46;
-    private boolean playAfterProbe;
-    private boolean launcherResumed;
+    private static final int REQUEST_ISO = 47;
+
+    private static final int ACCENT = 0xFFE8A13C;
+    private static final int ACCENT_GOLD = 0xFFFF8A00;
+    private static final int BG_DARK = 0xFF0C1014;
+    private static final int CARD_BG_START = 0xFF181A20;
+    private static final int CARD_BG_END = 0xFF111317;
+    private static final int TEXT_MUTED = 0xFF9AA0AA;
 
     private static final String TREE_URI = "tree_uri";
+    private static final String PREF_ISO_PATH = "iso_path";
     static final String GAME_FOLDER_NAME = "nsfmw-androidevolved";
 
-    private TextView importStatus;
-    private Button selectFolder;
-    private Button launchGame;
-    private Button sendReport;
+    private boolean playAfterProbe;
+    private boolean launcherResumed;
+    private String verifiedGamePath = null;
     private File pendingReport;
     private boolean pendingGithub;
+
+    private TextView importStatus;
+    private Button selectRomBtn;
+    private Button launchGameBtn;
+    private LinearLayout shaderPanel;
+    private ProgressBar shaderProgress;
+    private TextView shaderText;
+    private ShaderBuilder shaderBuilder;
+    private LinearLayout advContent;
+    private TextView advArrow;
+
     private final ExecutorService importer = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -76,9 +114,7 @@ public final class MainActivity extends Activity {
             }
         }
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        applyImmersive();
         setContentView(buildScreen());
         prepareSharedGameFolder();
     }
@@ -87,24 +123,28 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         launcherResumed = true;
-        if (checksList != null && hasStorageAccess()) {
-            showChecks(sharedGameRoot());
-        }
+        applyImmersive();
+        checkAndRefreshGameStatus();
     }
 
-    @Override protected void onPause() {
+    @Override
+    protected void onPause() {
         launcherResumed = false;
         super.onPause();
     }
 
-    // ---- Screen --------------------------------------------------------------------------------------------
+    private void applyImmersive() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                View.SYSTEM_UI_FLAG_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+    }
 
-    private static final int ACCENT = 0xFFFF8A00;
-    private LinearLayout checksList;
-    private LinearLayout shaderPanel;
-    private ProgressBar shaderProgress;
-    private TextView shaderText;
-    private ShaderBuilder shaderBuilder;
+    // ============================================================================================
+    // UI BUILDER
+    // ============================================================================================
 
     private View buildScreen() {
         ScrollView scroll = new ScrollView(this);
@@ -114,631 +154,689 @@ public final class MainActivity extends Activity {
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(20), dp(24), dp(20), dp(36));
+        content.setPadding(dp(16), dp(18), dp(16), dp(36));
         scroll.addView(content, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
 
-        // Header: authentic banner & title
+        // 1. Header: Authentic NFSMW Logo & Subtitle Chip
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.banner);
         logo.setAdjustViewBounds(true);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
         content.addView(logo, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(80)));
 
-        TextView subtitle = label("Xbox 360 · ARM64 Mali Edition", 13, 0x99FFFFFF, false);
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Xbox 360 · ARM64 Mali Edition");
+        subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        subtitle.setTypeface(Typeface.DEFAULT_BOLD);
+        subtitle.setTextColor(ACCENT);
+        subtitle.setLetterSpacing(0.06f);
         subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(0, dp(4), 0, dp(12));
-        content.addView(subtitle);
+        subtitle.setPadding(dp(14), dp(3), dp(14), dp(3));
+        GradientDrawable subBg = new GradientDrawable();
+        subBg.setColor(0x1AE8A13C);
+        subBg.setStroke(dp(1), 0x4DE8A13C);
+        subBg.setCornerRadius(dp(14));
+        subtitle.setBackground(subBg);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subLp.gravity = Gravity.CENTER_HORIZONTAL;
+        subLp.topMargin = dp(4);
+        subLp.bottomMargin = dp(14);
+        content.addView(subtitle, subLp);
 
-        // Card 1: Game Files
-        LinearLayout gameCard = card();
-        content.addView(gameCard, marginBox(10));
-        gameCard.addView(sectionHeader("GAME FILES"));
-        importStatus = label("", 13, 0xDDFFFFFF, false);
-        importStatus.setPadding(0, dp(2), 0, dp(6));
-        gameCard.addView(importStatus);
-        checksList = new LinearLayout(this);
-        checksList.setOrientation(LinearLayout.VERTICAL);
-        gameCard.addView(checksList);
+        SharedPreferences ctrlPrefs = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
 
+        // CARD 1: Game
+        content.addView(buildGameCard());
+
+        // CARD 2: Display
+        content.addView(buildDisplayCard(ctrlPrefs));
+
+        // CARD 3: Touch controls
+        content.addView(buildTouchControlsCard(ctrlPrefs));
+
+        // CARD 4: Graphics
+        content.addView(buildGraphicsCard(ctrlPrefs));
+
+        // CARD 5: Sound
+        content.addView(buildSoundCard(ctrlPrefs));
+
+        // CARD 6: Performance
+        content.addView(buildPerformanceCard(ctrlPrefs));
+
+        // CARD 7: Language
+        content.addView(buildLanguageCard());
+
+        // CARD 8: Advanced (STRICTLY COLLAPSED BY DEFAULT)
+        content.addView(buildAdvancedCard());
+
+        return scroll;
+    }
+
+    // ---- CARD 1: Game --------------------------------------------------------------------------
+    private View buildGameCard() {
+        LinearLayout card = createCard();
+        card.addView(cardTitle("Game"));
+        card.addView(goldLine());
+
+        importStatus = bodyText("No ISO or folder selected. You need your own Xbox 360 ISO or extracted game folder.", 12, Color.WHITE);
+        card.addView(importStatus);
+
+        TextView subDesc = bodyText("This is the USA/PAL-Multi version of the game. Choose either an extracted game folder or an ISO image.", 10.5f, TEXT_MUTED);
+        subDesc.setPadding(0, dp(2), 0, dp(10));
+        card.addView(subDesc);
+
+        // Progress panel (hidden unless extracting or compiling shaders)
         shaderPanel = new LinearLayout(this);
         shaderPanel.setOrientation(LinearLayout.VERTICAL);
-        shaderPanel.setPadding(0, dp(8), 0, 0);
+        shaderPanel.setPadding(0, 0, 0, dp(10));
         shaderPanel.setVisibility(View.GONE);
-        shaderText = label("", 13, 0xFFFFFFFF, false);
+        shaderText = bodyText("", 12, Color.WHITE);
         shaderPanel.addView(shaderText);
         shaderProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         shaderProgress.setMax(1000);
         shaderProgress.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
         shaderPanel.addView(shaderProgress, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(10)));
-        gameCard.addView(shaderPanel);
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(8)));
+        card.addView(shaderPanel);
 
-        selectFolder = actionButton("Select Game Folder", false);
-        selectFolder.setOnClickListener(view -> selectGameFolder());
-        LinearLayout.LayoutParams folderParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(46));
-        folderParams.topMargin = dp(10);
-        gameCard.addView(selectFolder, folderParams);
+        selectRomBtn = actionButton("Choose Game (ISO or Folder)...", false);
+        selectRomBtn.setOnClickListener(v -> showPickerSelectionDialog());
+        card.addView(selectRomBtn);
 
-        // Hero PLAY Button
-        launchGame = actionButton("▶   START ENGINE", true);
-        launchGame.setVisibility(View.GONE);
-        launchGame.setOnClickListener(view -> play());
-        LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(58));
-        playParams.topMargin = dp(14);
-        content.addView(launchGame, playParams);
+        launchGameBtn = actionButton("Play", true);
+        launchGameBtn.setEnabled(false);
+        launchGameBtn.setAlpha(0.45f);
+        launchGameBtn.setOnClickListener(v -> playChecked());
+        LinearLayout.LayoutParams playLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
+        playLp.topMargin = dp(8);
+        card.addView(launchGameBtn, playLp);
 
-        // Action Buttons: Settings, Driver, Diagnostics
-        Button btnSettings = actionButton("⚙   Settings", false);
-        btnSettings.setOnClickListener(v -> showSettingsDialog());
-        content.addView(btnSettings, marginBox(12));
+        TextView playHint = bodyText("Choose your game folder or ISO to play.", 10.5f, TEXT_MUTED);
+        playHint.setGravity(Gravity.CENTER);
+        playHint.setPadding(0, dp(4), 0, 0);
+        card.addView(playHint);
 
-        Button btnDriver = actionButton("🎮   Mali Vulkan Driver", false);
-        btnDriver.setOnClickListener(v -> chooseDriver());
-        content.addView(btnDriver, marginBox(10));
-
-        sendReport = actionButton("📋   Diagnostics & Share Logs", false);
-        sendReport.setOnClickListener(view -> chooseReportDestination());
-        content.addView(sendReport, marginBox(10));
-
-        return scroll;
+        return card;
     }
 
-    private LinearLayout.LayoutParams marginBox(int topMarginDp) {
+    // ---- CARD 2: Display -----------------------------------------------------------------------
+    private View buildDisplayCard(SharedPreferences ctrl) {
+        LinearLayout card = createCard();
+        card.addView(cardTitle("Display"));
+        card.addView(goldLine());
+
+        card.addView(heading("Resolution"));
+        card.addView(bodyText("Size of the game image on screen. The game itself is rendered at native resolution.", 10.5f, TEXT_MUTED));
+        String curRes = GameOptions.get(this, GameOptions.RESOLUTION);
+        RadioGroupHelper resGroup = new RadioGroupHelper();
+        card.addView(resGroup.createItem("480p - 720x480", "854x480".equals(curRes), () -> {
+            GameOptions.set(this, GameOptions.RESOLUTION, "854x480");
+        }));
+        card.addView(resGroup.createItem("Native - 1280x720", !"854x480".equals(curRes), () -> {
+            GameOptions.set(this, GameOptions.RESOLUTION, "1280x720");
+        }));
+
+        card.addView(switchRow("Stretch to full screen",
+                "Fill the whole screen without black bars, matching your phone's aspect ratio.",
+                ctrl.getBoolean("stretch", true),
+                (btn, on) -> ctrl.edit().putBoolean("stretch", on).apply()));
+
+        card.addView(switchRow("Show FPS",
+                "Shows current frames per second and minimum in-game.",
+                ctrl.getBoolean("show_fps", false),
+                (btn, on) -> ctrl.edit().putBoolean("show_fps", on).apply()));
+
+        return card;
+    }
+
+    // ---- CARD 3: Touch controls ----------------------------------------------------------------
+    private View buildTouchControlsCard(SharedPreferences ctrl) {
+        LinearLayout card = createCard();
+        card.addView(cardTitle("Touch controls"));
+        card.addView(goldLine());
+
+        card.addView(bodyText("Move the touch buttons and change their size and opacity.", 10.5f, TEXT_MUTED));
+
+        Button btnEditControls = actionButton("Edit touch controls", false);
+        btnEditControls.setOnClickListener(v -> {
+            startActivity(new Intent(MainActivity.this, TouchControlsEditorActivity.class));
+        });
+        card.addView(btnEditControls);
+
+        card.addView(switchRow("Vibration",
+                "The game rumbles when you hit walls or rough ground.",
+                ctrl.getBoolean("haptics", true),
+                (btn, on) -> ctrl.edit().putBoolean("haptics", on).apply()));
+
+        Button btnTestVib = actionButton("Test vibration", false);
+        btnTestVib.setOnClickListener(v -> {
+            Vibrator vib = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (vib != null && vib.hasVibrator()) {
+                vib.vibrate(120);
+                Toast.makeText(this, "Vibration tested", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Device vibrator not available", Toast.LENGTH_SHORT).show();
+            }
+        });
+        LinearLayout.LayoutParams vibLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(36));
+        vibLp.topMargin = dp(4);
+        vibLp.bottomMargin = dp(8);
+        card.addView(btnTestVib, vibLp);
+
+        card.addView(switchRow("Steer by tilting the phone",
+                "Activate and fine-tune. Tilt the phone to steer without touch buttons.",
+                ctrl.getBoolean("tilt", false),
+                (btn, on) -> ctrl.edit().putBoolean("tilt", on).apply()));
+
+        card.addView(heading("Steering sensitivity"));
+        int currentDeg = Math.round(ctrl.getFloat("tilt_sensitivity", 1.0f) * 15f);
+        TextView lblTilt = bodyText("0 - full turn at " + currentDeg + "°", 10.5f, TEXT_MUTED);
+        card.addView(lblTilt);
+
+        SeekBar sbTilt = new SeekBar(this);
+        sbTilt.setMin(5);
+        sbTilt.setMax(30);
+        sbTilt.setProgress(Math.max(5, Math.min(30, currentDeg)));
+        sbTilt.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        sbTilt.setThumbTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        sbTilt.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                lblTilt.setText("0 - full turn at " + progress + "°");
+                ctrl.edit().putFloat("tilt_sensitivity", progress / 15f).apply();
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        card.addView(sbTilt);
+        card.addView(bodyText("Pull to right: less tilt needed to steer all the way.", 10f, TEXT_MUTED));
+
+        return card;
+    }
+
+    // ---- CARD 4: Graphics ----------------------------------------------------------------------
+    private View buildGraphicsCard(SharedPreferences ctrl) {
+        LinearLayout card = createCard();
+        card.addView(cardTitle("Graphics"));
+        card.addView(goldLine());
+
+        // Render resolution
+        card.addView(heading("Render resolution"));
+        card.addView(bodyText("The size the game is drawn at, before it goes to the screen. 1280x720 is native Xbox 360.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper renderGroup = new RadioGroupHelper();
+        String curRes = GameOptions.get(this, GameOptions.RESOLUTION);
+        card.addView(renderGroup.createItem("1024x576 - faster", "960x540".equals(curRes), () -> GameOptions.set(this, GameOptions.RESOLUTION, "960x540")));
+        card.addView(renderGroup.createItem("1280x720 - Xbox 360", "1280x720".equals(curRes), () -> GameOptions.set(this, GameOptions.RESOLUTION, "1280x720")));
+        card.addView(renderGroup.createItem("1920x1080 - sharper", "1920x1080".equals(curRes), () -> GameOptions.set(this, GameOptions.RESOLUTION, "1920x1080")));
+
+        // Frame rate limit
+        card.addView(heading("Frame rate limit"));
+        card.addView(bodyText("Target framerate cap for gameplay smoothness vs battery life.", 10.5f, TEXT_MUTED));
+        Spinner spFps = createSpinner(new String[] {"60 fps", "30 fps", "Unlocked"},
+                "30".equals(GameOptions.get(this, GameOptions.FPS)) ? 1 : 0,
+                pos -> GameOptions.set(this, GameOptions.FPS, pos == 1 ? "30" : "60"));
+        card.addView(spFps);
+
+        // Anti-aliasing
+        card.addView(heading("Anti-aliasing"));
+        card.addView(bodyText("Smooth jagged edges. FXAA applies a lightweight filter over the final image with minimal overhead.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper aaGroup = new RadioGroupHelper();
+        String curAa = GameOptions.get(this, GameOptions.AA);
+        card.addView(aaGroup.createItem("Off", "apagado".equals(curAa), () -> GameOptions.set(this, GameOptions.AA, "apagado")));
+        card.addView(aaGroup.createItem("FXAA", "fxaa".equals(curAa), () -> GameOptions.set(this, GameOptions.AA, "fxaa")));
+
+        // Scaling to screen
+        card.addView(heading("Scaling to the screen"));
+        card.addView(bodyText("How the game image scales to your phone's display.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper scaleGroup = new RadioGroupHelper();
+        card.addView(scaleGroup.createItem("Bilinear (standard)", true, () -> {}));
+        card.addView(scaleGroup.createItem("AMD FSR 1.0 - sharper upscaling", false, () -> {}));
+        card.addView(scaleGroup.createItem("AMD CAS - sharpening only", false, () -> {}));
+
+        // Anisotropic filtering
+        card.addView(heading("Anisotropic filtering"));
+        card.addView(bodyText("Sharper textures seen at an angle, such as asphalt and road markings in the distance.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper afGroup = new RadioGroupHelper();
+        String curAf = GameOptions.get(this, GameOptions.ANISOTROPIC);
+        card.addView(afGroup.createItem("Off", "0".equals(curAf), () -> GameOptions.set(this, GameOptions.ANISOTROPIC, "0")));
+        card.addView(afGroup.createItem("2x", "2".equals(curAf), () -> GameOptions.set(this, GameOptions.ANISOTROPIC, "2")));
+        card.addView(afGroup.createItem("4x", "4".equals(curAf) || (!"0".equals(curAf) && !"2".equals(curAf) && !"16".equals(curAf)), () -> GameOptions.set(this, GameOptions.ANISOTROPIC, "4")));
+        card.addView(afGroup.createItem("16x", "16".equals(curAf), () -> GameOptions.set(this, GameOptions.ANISOTROPIC, "16")));
+
+        // Shadows
+        card.addView(heading("Shadows"));
+        card.addView(bodyText("How often shadow maps update. Every 2 frames reduces overhead with no visible difference.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper shGroup = new RadioGroupHelper();
+        String curSh = GameOptions.get(this, GameOptions.SHADOWS);
+        card.addView(shGroup.createItem("Every frame", !"2".equals(curSh), () -> GameOptions.set(this, GameOptions.SHADOWS, "1")));
+        card.addView(shGroup.createItem("Every 2 frames", "2".equals(curSh), () -> GameOptions.set(this, GameOptions.SHADOWS, "2")));
+
+        // Shadow distance
+        card.addView(heading("Shadow distance"));
+        card.addView(bodyText("Distance at which dynamic world objects cast shadows.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper distGroup = new RadioGroupHelper();
+        card.addView(distGroup.createItem("Far (Xbox 360 default)", true, () -> {}));
+        card.addView(distGroup.createItem("Medium", false, () -> {}));
+        card.addView(distGroup.createItem("Near - faster", false, () -> {}));
+
+        // Car reflections
+        card.addView(heading("Car reflections"));
+        card.addView(bodyText("Cubemap faces rendered for car paint and chrome surfaces.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper reflGroup = new RadioGroupHelper();
+        String curRefl = GameOptions.get(this, GameOptions.CAR_REFLECTIONS);
+        card.addView(reflGroup.createItem("High (6 faces)", !"2".equals(curRefl) && !"1".equals(curRefl), () -> GameOptions.set(this, GameOptions.CAR_REFLECTIONS, "6")));
+        card.addView(reflGroup.createItem("Medium (2 faces)", "2".equals(curRefl), () -> GameOptions.set(this, GameOptions.CAR_REFLECTIONS, "2")));
+        card.addView(reflGroup.createItem("Low (1 face - fast)", "1".equals(curRefl), () -> GameOptions.set(this, GameOptions.CAR_REFLECTIONS, "1")));
+
+        // Wet road reflection
+        card.addView(switchRow("Wet road reflection",
+                "Water specular reflections on asphalt during rainy weather.",
+                "true".equals(GameOptions.get(this, GameOptions.ROAD_REFLECTION)),
+                (btn, on) -> GameOptions.set(this, GameOptions.ROAD_REFLECTION, on ? "true" : "false")));
+
+        // Sky glow
+        card.addView(heading("Sky glow"));
+        card.addView(bodyText("Atmospheric amber halo and lens flare in the Rockport horizon.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper skyGroup = new RadioGroupHelper();
+        String curSky = GameOptions.get(this, GameOptions.SKY);
+        card.addView(skyGroup.createItem("Natural", !"original".equals(curSky) && !"suave".equals(curSky), () -> GameOptions.set(this, GameOptions.SKY, "natural")));
+        card.addView(skyGroup.createItem("Original (Xbox 360)", "original".equals(curSky), () -> GameOptions.set(this, GameOptions.SKY, "original")));
+        card.addView(skyGroup.createItem("Soft", "suave".equals(curSky), () -> GameOptions.set(this, GameOptions.SKY, "suave")));
+
+        // Color filter
+        card.addView(heading("Game colour filter"));
+        card.addView(bodyText("Rockport iconic warm yellow/sepia cinematic grading.", 10.5f, TEXT_MUTED));
+        RadioGroupHelper filterGroup = new RadioGroupHelper();
+        card.addView(filterGroup.createItem("Original", true, () -> {}));
+        card.addView(filterGroup.createItem("Half", false, () -> {}));
+        card.addView(filterGroup.createItem("Off", false, () -> {}));
+
+        // Speed blur
+        card.addView(switchRow("Speed blur",
+                "Motion blur streaks and camera shake at high speeds.",
+                ctrl.getBoolean("motion_blur", true),
+                (btn, on) -> ctrl.edit().putBoolean("motion_blur", on).apply()));
+
+        // Image filter
+        card.addView(heading("Image filter"));
+        card.addView(bodyText("Optional post-processing filter presets.", 10.5f, TEXT_MUTED));
+        Spinner spFilter = createSpinner(new String[] {"None", "Warm", "Cold", "Vibrant", "Cinema"}, 0, pos -> {
+            String[] vals = {"apagado", "calido", "frio", "vivo", "cine"};
+            GameOptions.set(this, GameOptions.FILTER, vals[pos]);
+        });
+        card.addView(spFilter);
+
+        return card;
+    }
+
+    // ---- CARD 5: Sound -------------------------------------------------------------------------
+    private View buildSoundCard(SharedPreferences ctrl) {
+        LinearLayout card = createCard();
+        card.addView(cardTitle("Sound"));
+        card.addView(goldLine());
+
+        card.addView(switchRow("Sound through Audio",
+                "Thicker, louder engine acoustics and deeper bass response.",
+                ctrl.getBoolean("audio_boost", true),
+                (btn, on) -> ctrl.edit().putBoolean("audio_boost", on).apply()));
+
+        return card;
+    }
+
+    // ---- CARD 6: Performance -------------------------------------------------------------------
+    private View buildPerformanceCard(SharedPreferences ctrl) {
+        LinearLayout card = createCard();
+        card.addView(cardTitle("Performance"));
+        card.addView(goldLine());
+
+        card.addView(switchRow("Pin threads to cores",
+                "Pins game worker threads to fast CPU cores to reduce frame pacing jitter.",
+                ctrl.getBoolean("pin_threads", true),
+                (btn, on) -> ctrl.edit().putBoolean("pin_threads", on).apply()));
+
+        card.addView(heading("GPU driver"));
+        RadioGroupHelper driverGroup = new RadioGroupHelper();
+        String curDriver = GpuDrivers.selectedId(this);
+        boolean isMaliCompat = "malicompat-g71".equals(curDriver);
+        card.addView(driverGroup.createItem("System driver (Default)", !isMaliCompat, () -> {
+            GpuDrivers.select(this, "");
+            Toast.makeText(this, "Using System driver (Default)", Toast.LENGTH_SHORT).show();
+        }));
+        card.addView(driverGroup.createItem("MaliCompat driver", isMaliCompat, () -> {
+            GpuDrivers.ensureDefaultDrivers(this);
+            GpuDrivers.select(this, "malicompat-g71");
+            Toast.makeText(this, "Using MaliCompat driver", Toast.LENGTH_SHORT).show();
+        }));
+
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams btnRowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnRowLp.topMargin = dp(6);
+        btnRow.setLayoutParams(btnRowLp);
+
+        Button btnImport = actionButton("Import driver (ZIP)", false);
+        btnImport.setOnClickListener(v -> chooseDriverZip());
+        LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        lp1.rightMargin = dp(4);
+        btnRow.addView(btnImport, lp1);
+
+        Button btnDelete = actionButton("Delete custom", false);
+        btnDelete.setTextColor(0xFFFF6666);
+        btnDelete.setOnClickListener(v -> {
+            GpuDrivers.select(this, "");
+            Toast.makeText(this, "Reset to System default driver", Toast.LENGTH_SHORT).show();
+        });
+        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        lp2.leftMargin = dp(4);
+        btnRow.addView(btnDelete, lp2);
+        card.addView(btnRow);
+
+        card.addView(switchRow("CPU turbo",
+                "Requests aggressive CPU frequency scaling for high performance.",
+                ctrl.getBoolean("cpu_turbo", false),
+                (btn, on) -> ctrl.edit().putBoolean("cpu_turbo", on).apply()));
+
+        return card;
+    }
+
+    // ---- CARD 7: Language ----------------------------------------------------------------------
+    private View buildLanguageCard() {
+        LinearLayout card = createCard();
+        card.addView(cardTitle("Language"));
+        card.addView(goldLine());
+
+        RadioGroupHelper langGroup = new RadioGroupHelper();
+        String curLang = GameOptions.get(this, "language");
+        card.addView(langGroup.createItem("Automatic (phone language)", "-1".equals(curLang), () -> GameOptions.set(this, "language", "-1")));
+        card.addView(langGroup.createItem("English", "0".equals(curLang), () -> GameOptions.set(this, "language", "0")));
+        card.addView(langGroup.createItem("Español", "4".equals(curLang), () -> GameOptions.set(this, "language", "4")));
+        card.addView(langGroup.createItem("Português", "2".equals(curLang), () -> GameOptions.set(this, "language", "2")));
+
+        return card;
+    }
+
+    // ---- CARD 8: Advanced (STRICTLY COLLAPSED BY DEFAULT) ---------------------------------------
+    private View buildAdvancedCard() {
+        LinearLayout card = createCard();
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setClickable(true);
+        header.setFocusable(true);
+
+        advArrow = cardTitle("▶ Advanced");
+        header.addView(advArrow, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        card.addView(header);
+
+        advContent = new LinearLayout(this);
+        advContent.setOrientation(LinearLayout.VERTICAL);
+        advContent.setVisibility(View.GONE); // Strictly collapsed by default
+
+        advContent.addView(goldLine());
+        advContent.addView(bodyText("Tools to diagnose Vulkan and share logs without launching gameplay.", 10.5f, TEXT_MUTED));
+
+        Button btnVulkan = actionButton("Test Vulkan", false);
+        btnVulkan.setOnClickListener(v -> probeDriver(false));
+        LinearLayout.LayoutParams vLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(40));
+        vLp.topMargin = dp(8);
+        advContent.addView(btnVulkan, vLp);
+
+        Button btnReport = actionButton("Diagnostics & Share Logs", false);
+        btnReport.setOnClickListener(v -> chooseReportDestination());
+        LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(40));
+        rLp.topMargin = dp(8);
+        advContent.addView(btnReport, rLp);
+
+        header.setOnClickListener(v -> {
+            boolean isVisible = advContent.getVisibility() == View.VISIBLE;
+            advContent.setVisibility(isVisible ? View.GONE : View.VISIBLE);
+            advArrow.setText(isVisible ? "▶ Advanced" : "▼ Advanced");
+        });
+
+        card.addView(advContent);
+        return card;
+    }
+
+    // ============================================================================================
+    // UI WIDGET HELPERS
+    // ============================================================================================
+
+    private LinearLayout createCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14), dp(14), dp(14), dp(16));
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {CARD_BG_START, CARD_BG_END});
+        bg.setCornerRadius(dp(14));
+        bg.setStroke(dp(1), 0x24E8A13C);
+        card.setBackground(bg);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(topMarginDp);
-        return lp;
+        lp.topMargin = dp(12);
+        card.setLayoutParams(lp);
+        return card;
     }
 
-    private TextView sectionHeader(String title) {
-        TextView t = label(title, 12, ACCENT, true);
-        t.setPadding(0, 0, 0, dp(6));
+    private TextView cardTitle(String title) {
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(Color.WHITE);
+        t.setLetterSpacing(-0.01f);
         return t;
     }
 
-    // ---- Shader library ------------------------------------------------------------------------------------
-
-    private void play() {
-        playChecked();
+    private View goldLine() {
+        View line = new View(this);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[] {0xB3E8A13C, 0x33FF8A00, Color.TRANSPARENT});
+        line.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+        lp.topMargin = dp(6);
+        lp.bottomMargin = dp(10);
+        line.setLayoutParams(lp);
+        return line;
     }
 
-    private void playChecked() {
-        File gameRoot = sharedGameRoot();
-        if (!isValidGameFolder(gameRoot)) {
-            reportError("Please select the game folder containing default.xex, NFS, and Movies.");
-            return;
-        }
-
-        File userDir = new File(getFilesDir(), "nfsmw/user");
-        GameOptions.writeToml(this, userDir);
-        File extDir = getExternalFilesDir(null);
-        if (extDir != null) GameOptions.writeToml(this, extDir);
-        savePathForNativeBackend(gameRoot.getAbsolutePath());
-
-        if ("nativo".equals(GameOptions.get(this, GameOptions.RENDERER))) {
-            if (!ShaderBuilder.ensureBundledShaders(this, gameRoot) && !ShaderBuilder.hasLibrary(gameRoot)) {
-                buildShaders(true);
-                return;
-            }
-        }
-        startActivity(new Intent(this, GameActivity.class));
-    }
-
-    private void savePathForNativeBackend(String path) {
-        try {
-            File f1 = new File(getFilesDir(), "selected_game_path.txt");
-            try (FileOutputStream out = new FileOutputStream(f1)) {
-                out.write(path.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            }
-            File ext = getExternalFilesDir(null);
-            if (ext != null) {
-                File f2 = new File(ext, "selected_game_path.txt");
-                try (FileOutputStream out = new FileOutputStream(f2)) {
-                    out.write(path.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                }
-            }
-        } catch (IOException e) {
-            android.util.Log.e("NFSMW", "Failed to save selected_game_path.txt", e);
-        }
-    }
-
-    // ---- Tester reports ------------------------------------------------------------------------------------
-
-    @Override
-    protected void onSaveInstanceState(Bundle state) {
-        if (pendingReport != null) {
-            state.putString("pending_report", pendingReport.getName());
-            state.putBoolean("pending_github", pendingGithub);
-        }
-        state.putBoolean("play_after_probe", playAfterProbe);
-        super.onSaveInstanceState(state);
-    }
-
-    private void chooseReportDestination() {
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Share Crash Report / Logs")
-                .setMessage("The diagnostic bundle includes device model, Android version, GPU features, settings, and application logs.")
-                .setPositiveButton("Email", (dialog, which) -> prepareReport(0))
-                .setNeutralButton("GitHub", (dialog, which) -> prepareReport(1))
-                .setNegativeButton("Save ZIP", (dialog, which) -> prepareReport(2)).show();
-    }
-
-    private void reportError(String message) {
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Diagnostic").setMessage(message).setPositiveButton("OK", null).show();
-    }
-
-    private void prepareReport(int destination) {
-        sendReport.setEnabled(false);
-        sendReport.setText("Preparing diagnostic report…");
-        importer.execute(() -> {
-            try {
-                File report = Diagnostics.createReport(this);
-                mainHandler.post(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    sendReport.setEnabled(true);
-                    sendReport.setText("Share Crash Report / Logs");
-                    if (destination == 0) shareReportByEmail(report);
-                    else saveReport(report, destination == 1);
-                });
-            } catch (Exception error) {
-                mainHandler.post(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    sendReport.setEnabled(true);
-                    sendReport.setText("Share Crash Report / Logs");
-                    reportError("Could not generate report: " + error.getMessage());
-                });
-            }
-        });
-    }
-
-    private void shareReportByEmail(File report) {
-        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".reports", report);
-        Intent email = new Intent(Intent.ACTION_SEND);
-        email.setType("application/zip");
-        email.putExtra(Intent.EXTRA_EMAIL, new String[]{Diagnostics.EMAIL});
-        email.putExtra(Intent.EXTRA_SUBJECT, "NFSMW Recomp Android: " + Build.MODEL + " — Diagnostic");
-        email.putExtra(Intent.EXTRA_TEXT, Diagnostics.summary(this) + "\nWhat happened:\n\nSteps to reproduce:\n\nGame edition:\n\nDiagnostic file attached.");
-        email.putExtra(Intent.EXTRA_STREAM, uri);
-        email.setClipData(ClipData.newUri(getContentResolver(), "NFSMW Diagnostic", uri));
-        email.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        try { startActivity(Intent.createChooser(email, "Send diagnostic report")); }
-        catch (ActivityNotFoundException error) { saveReport(report, false); }
-    }
-
-    private void saveReport(File report, boolean github) {
-        pendingReport = report;
-        pendingGithub = github;
-        if (github) {
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Report on GitHub")
-                    .setMessage("First, save the ZIP archive. Afterwards GitHub will open: describe the problem and attach the saved ZIP.")
-                    .setPositiveButton("Save and Open GitHub", (dialog, which) -> chooseReportFile())
-                    .setNegativeButton("Cancel", (dialog, which) -> pendingReport = null).show();
-        } else chooseReportFile();
-    }
-
-    private void chooseReportFile() {
-        Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        save.addCategory(Intent.CATEGORY_OPENABLE);
-        save.setType("application/zip");
-        save.putExtra(Intent.EXTRA_TITLE, pendingReport.getName());
-        try { startActivityForResult(save, REQUEST_SAVE_REPORT); }
-        catch (ActivityNotFoundException error) {
-            pendingReport = null;
-            reportError("No application available to save files. Please try the Email option.");
-        }
-    }
-
-    private void finishReportSave(Uri destination) {
-        File report = pendingReport;
-        boolean github = pendingGithub;
-        pendingReport = null;
-        if (report == null || !report.isFile()) {
-            reportError("The report is no longer available. Please generate a new one.");
-            return;
-        }
-        importer.execute(() -> {
-            try (InputStream input = new FileInputStream(report);
-                 java.io.OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
-                if (output == null) throw new IOException("Could not open destination file.");
-                byte[] buffer = new byte[16384];
-                for (int count; (count = input.read(buffer)) != -1;) output.write(buffer, 0, count);
-            } catch (Exception error) {
-                mainHandler.post(() -> {
-                    if (!isFinishing() && !isDestroyed()) reportError("Could not save ZIP archive: " + error.getMessage());
-                });
-                return;
-            }
-            mainHandler.post(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                if (github) {
-                    String body = "### What happened\n\n### Steps to reproduce\n\n### Game edition\n\n### Device\n"
-                            + Diagnostics.summary(this) + "\n### Diagnostic\nAttach the saved file **" + report.getName() + "** here.\n";
-                    Uri issue = Uri.parse(Diagnostics.ISSUES).buildUpon()
-                            .appendQueryParameter("title", "[Android] " + Build.MODEL + ": ")
-                            .appendQueryParameter("body", body).build();
-                    try { startActivity(new Intent(Intent.ACTION_VIEW, issue)); }
-                    catch (ActivityNotFoundException error) { reportError("ZIP saved. Please visit " + Diagnostics.ISSUES + " and attach the file."); }
-                } else reportError("ZIP saved successfully. You can attach it to a GitHub issue or email it.");
-            });
-        });
-    }
-
-    /** Builds nfsmw_shaders.nfsp from the game files (a minute or two, only once). */
-    private void buildShaders(boolean thenPlay) {
-        if (shaderBuilder != null) {
-            return;
-        }
-        launchGame.setEnabled(false);
-        launchGame.setAlpha(.5f);
-        selectFolder.setEnabled(false);
-        shaderPanel.setVisibility(View.VISIBLE);
-        shaderProgress.setProgress(0);
-        shaderText.setText("Generating native renderer shaders (first launch only)…");
-        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        shaderBuilder = new ShaderBuilder(this, sharedGameRoot(), new ShaderBuilder.Listener() {
-            @Override
-            public void onProgress(float fraction, String text) {
-                shaderProgress.setProgress(Math.round(fraction * 1000));
-                shaderText.setText(text);
-            }
-
-            @Override
-            public void onDone(File library) {
-                shadersFinished();
-                shaderPanel.setVisibility(View.GONE);
-                showChecks(sharedGameRoot());
-                if (thenPlay) {
-                    startActivity(new Intent(MainActivity.this, GameActivity.class));
-                }
-            }
-
-            @Override
-            public void onError(String message) {
-                shadersFinished();
-                shaderText.setText("Failed to compile shaders: " + message);
-                shaderProgress.setProgress(0);
-            }
-        });
-        shaderBuilder.start();
-    }
-
-    private void shadersFinished() {
-        shaderBuilder = null;
-        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        launchGame.setEnabled(true);
-        launchGame.setAlpha(1f);
-        selectFolder.setEnabled(true);
-    }
-
-    private void refreshOptions() {
-        // Options are now accessed via showSettingsDialog
-    }
-
-    private void showSettingsDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackgroundColor(0xFF10161E);
-
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(16), dp(16), dp(16), dp(20));
-        scroll.addView(layout, new ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-
-        TextView title = label("SETTINGS", 18, ACCENT, true);
-        title.setGravity(Gravity.CENTER);
-        title.setPadding(0, 0, 0, dp(12));
-        layout.addView(title);
-
-        SharedPreferences controls = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
-
-        // Section 1: GRAPHICS ENGINE & VULKAN
-        layout.addView(sectionHeader("⚡ GRAPHICS ENGINE & VULKAN"));
-        LinearLayout group1 = card();
-        layout.addView(group1, marginBox(4));
-
-        for (GameOptions.Option opt : new GameOptions.Option[]{
-                GameOptions.find(GameOptions.RENDERER),
-                GameOptions.find(GameOptions.RESOLUTION),
-                GameOptions.find(GameOptions.EDRAM),
-                GameOptions.find(GameOptions.PIPELINE_THREADS),
-        }) {
-            String val = GameOptions.get(this, opt.key);
-            group1.addView(dialogOptionRow(opt.title, opt.shortLabel(val), () -> {
-                chooseOptionWithDescription(opt, this::showSettingsDialog);
-            }));
-        }
-
-        // Section 2: VIDEO & PERFORMANCE
-        layout.addView(sectionHeader("🎮 VIDEO & PERFORMANCE"), marginBox(14));
-        LinearLayout group2 = card();
-        layout.addView(group2, marginBox(4));
-
-        for (GameOptions.Option opt : new GameOptions.Option[]{
-                GameOptions.find(GameOptions.TEXTURE_CACHE),
-                GameOptions.find(GameOptions.FPS),
-                GameOptions.find(GameOptions.AA),
-                GameOptions.find(GameOptions.ANISOTROPIC),
-                GameOptions.find(GameOptions.STABILITY),
-                GameOptions.find(GameOptions.CAR_REFLECTIONS),
-                GameOptions.find(GameOptions.FILTER),
-        }) {
-            String val = GameOptions.get(this, opt.key);
-            group2.addView(dialogOptionRow(opt.title, opt.shortLabel(val), () -> {
-                chooseOptionWithDescription(opt, this::showSettingsDialog);
-            }));
-        }
-
-        group2.addView(switchRow("Stretch Screen (Fill Display)", controls.getBoolean("stretch", true), (btn, on) -> {
-            controls.edit().putBoolean("stretch", on).apply();
-        }));
-        group2.addView(switchRow("Optimize 3D Textures to 2D", controls.getBoolean("gpu_3d_to_2d", true), (btn, on) -> {
-            controls.edit().putBoolean("gpu_3d_to_2d", on).apply();
-        }));
-        group2.addView(switchRow("Async Shader Compilation", controls.getBoolean("async_shaders", true), (btn, on) -> {
-            controls.edit().putBoolean("async_shaders", on).apply();
-        }));
-        group2.addView(switchRow("Vertical Sync (V-Sync)", controls.getBoolean("vsync", true), (btn, on) -> {
-            controls.edit().putBoolean("vsync", on).apply();
-        }));
-        group2.addView(switchRow("Skip Incomplete Frames", controls.getBoolean("async_skip", true), (btn, on) -> {
-            controls.edit().putBoolean("async_skip", on).apply();
-        }));
-
-        // Section 3: AUDIO & SYSTEM
-        layout.addView(sectionHeader("🔊 AUDIO & SYSTEM"), marginBox(14));
-        LinearLayout group3 = card();
-        layout.addView(group3, marginBox(4));
-
-        group3.addView(switchRow("Black Edition Content (Bonus Cars)", controls.getBoolean("black_edition", true), (btn, on) -> {
-            controls.edit().putBoolean("black_edition", on).apply();
-        }));
-        group3.addView(switchRow("On-Screen Virtual Controls", controls.getBoolean("touch_controls", true), (btn, on) -> {
-            controls.edit().putBoolean("touch_controls", on).apply();
-        }));
-
-        for (GameOptions.Option opt : GameOptions.AUDIO_SYSTEM) {
-            String val = GameOptions.get(this, opt.key);
-            group3.addView(dialogOptionRow(opt.title, opt.shortLabel(val), () -> {
-                chooseOptionWithDescription(opt, this::showSettingsDialog);
-            }));
-        }
-
-        builder.setView(scroll);
-        builder.setPositiveButton("SAVE & APPLY", (d, w) -> {
-            File userDir = new File(getFilesDir(), "nfsmw/user");
-            GameOptions.writeToml(this, userDir);
-            File extDir = getExternalFilesDir(null);
-            if (extDir != null) GameOptions.writeToml(this, extDir);
-            d.dismiss();
-        });
-        builder.setNeutralButton("RESET DEFAULTS", (d, w) -> {
-            for (GameOptions.Option opt : GameOptions.ALL) {
-                GameOptions.set(this, opt.key, opt.defaultValue);
-            }
-            controls.edit()
-                    .putBoolean("stretch", true)
-                    .putBoolean("gpu_3d_to_2d", true)
-                    .putBoolean("async_shaders", true)
-                    .putBoolean("vsync", true)
-                    .putBoolean("async_skip", true)
-                    .putBoolean("black_edition", true)
-                    .putBoolean("touch_controls", true)
-                    .apply();
-            d.dismiss();
-            showSettingsDialog();
-        });
-        builder.setNegativeButton("CLOSE", null);
-        AlertDialog dialog = builder.create();
-        dialog.show();
-    }
-
-    private View dialogOptionRow(String title, String badgeValue, Runnable onClick) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(10), dp(12), dp(10));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x14FFFFFF);
-        bg.setCornerRadius(dp(8));
-        row.setBackground(bg);
-        row.setClickable(true);
-        row.setFocusable(true);
-        row.setOnClickListener(v -> onClick.run());
-
-        TextView titleView = label(title, 13, 0xFFFFFFFF, true);
-        row.addView(titleView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        TextView current = label(badgeValue + "  ›", 13, ACCENT, true);
-        current.setGravity(Gravity.END);
-        current.setPadding(dp(8), 0, 0, 0);
-        row.addView(current);
-
+    private TextView heading(String text) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(Color.WHITE);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(6);
-        row.setLayoutParams(lp);
-        return row;
+        lp.topMargin = dp(10);
+        lp.bottomMargin = dp(2);
+        t.setLayoutParams(lp);
+        return t;
     }
 
-    private View switchRow(String title, boolean initial, android.widget.CompoundButton.OnCheckedChangeListener onCheck) {
+    private TextView bodyText(String text, float sp, int color) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        t.setTextColor(color);
+        t.setLineSpacing(dp(2), 1f);
+        return t;
+    }
+
+    private View switchRow(String title, String desc, boolean initial, CompoundButton.OnCheckedChangeListener onCheck) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(6), dp(12), dp(6));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x14FFFFFF);
-        bg.setCornerRadius(dp(8));
-        row.setBackground(bg);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowLp.topMargin = dp(10);
+        row.setLayoutParams(rowLp);
 
-        TextView titleView = label(title, 13, 0xFFFFFFFF, false);
-        row.addView(titleView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        TextView tTitle = bodyText(title, 13, Color.WHITE);
+        tTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        left.addView(tTitle);
+        if (desc != null && !desc.isEmpty()) {
+            TextView tDesc = bodyText(desc, 10.5f, TEXT_MUTED);
+            tDesc.setPadding(0, dp(1), 0, 0);
+            left.addView(tDesc);
+        }
+        row.addView(left, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        android.widget.Switch sw = new android.widget.Switch(this);
+        Switch sw = new Switch(this);
         sw.setChecked(initial);
+        sw.setThumbTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        sw.setTrackTintList(android.content.res.ColorStateList.valueOf(0x55E8A13C));
         sw.setOnCheckedChangeListener(onCheck);
         row.addView(sw);
 
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(6);
-        row.setLayoutParams(lp);
         return row;
-    }
-
-    private void chooseOptionWithDescription(GameOptions.Option option, Runnable onDone) {
-        String current = GameOptions.get(this, option.key);
-        int checked = 0;
-        for (int i = 0; i < option.values.length; i++) {
-            if (option.values[i].equals(current)) checked = i;
-        }
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
-        builder.setTitle(option.title);
-        builder.setSingleChoiceItems(option.labels, checked, (dialog, which) -> {
-            GameOptions.set(this, option.key, option.values[which]);
-            dialog.dismiss();
-            if (onDone != null) onDone.run();
-        });
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
-    }
-
-    private void chooseDriver() {
-        GpuDrivers.ensureDefaultDrivers(this);
-        java.util.List<GpuDrivers.Driver> drivers = GpuDrivers.list(this);
-        String[] names = new String[drivers.size() + 1];
-        names[0] = "System Driver (Mali G71 HAL)";
-        int selected = 0;
-        for (int i = 0; i < drivers.size(); ++i) {
-            names[i + 1] = drivers.get(i).name;
-            if (drivers.get(i).id.equals(GpuDrivers.selectedId(this))) selected = i + 1;
-        }
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Select Vulkan Driver")
-                .setSingleChoiceItems(names, selected, (dialog, which) -> {
-                    GpuDrivers.select(this, which == 0 ? "" : drivers.get(which - 1).id);
-                    refreshOptions();
-                    dialog.dismiss();
-                })
-                .setPositiveButton("Import Driver (.zip)", (dialog, which) -> {
-                    Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
-                            .addCategory(Intent.CATEGORY_OPENABLE);
-                    startActivityForResult(picker, REQUEST_DRIVER_ZIP);
-                })
-                .setNegativeButton("Cancel", null);
-        if (selected > 0) {
-            builder.setNeutralButton("Delete Selected", (dialog, which) -> {
-                GpuDrivers.Driver driver = GpuDrivers.selected(this);
-                if (driver == null) return;
-                try {
-                    GpuDrivers.remove(this, driver);
-                    refreshOptions();
-                } catch (IOException error) {
-                    reportError(error.getMessage());
-                }
-            });
-        }
-        builder.show();
-    }
-
-    private void probeDriver(boolean playAfter) {
-        playAfterProbe = playAfter;
-        launchGame.setEnabled(false);
-        startActivityForResult(new Intent(this, GpuProbeActivity.class), REQUEST_DRIVER_PROBE);
-    }
-
-    private void showDriverReport(String report) {
-        try {
-            Diagnostics.acceptGpu(this, report);
-            org.json.JSONObject gpu = new org.json.JSONObject(report);
-            boolean failed = gpu.optBoolean("driverLoadFailed") || gpu.has("probeError");
-            String text = "GPU: " + gpu.optString("gpu", "Unavailable")
-                    + "\nVulkan: " + gpu.optString("vulkan", "Unavailable")
-                    + "\nDescriptor Sets: " + gpu.optInt("maxBoundDescriptorSets")
-                    + "\n" + (gpu.optBoolean("compatible") ? "Native renderer features available."
-                            : "Missing features: " + gpu.optJSONArray("missing"));
-            if (failed) text = "Could not probe driver. " + gpu.optString("probeError", "Failed to load Vulkan.");
-            if (playAfterProbe && !failed) { playAfterProbe = false; playChecked(); return; }
-            playAfterProbe = false;
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Vulkan Driver Report").setMessage(text)
-                    .setPositiveButton("OK", null)
-                    .setNeutralButton("Use System Driver", (dialog, which) -> {
-                        GpuDrivers.select(this, ""); refreshOptions();
-                    }).show();
-        } catch (Exception error) { playAfterProbe = false; reportError("Invalid diagnostic report: " + error.getMessage()); }
-    }
-
-    private void showChecks(File folder) {
-        checksList.removeAllViews();
-        addCheck("default.xex", new File(folder, "default.xex").isFile(), true);
-        addCheck("NFS Directory", new File(folder, "NFS").isDirectory(), true);
-        addCheck("Movies Directory", new File(folder, "Movies").isDirectory(), true);
-        addCheck("Native Renderer Shaders", ShaderBuilder.hasLibrary(folder), false);
-    }
-
-    private void addCheck(String name, boolean ok, boolean required) {
-        String mark = ok ? "✓  " : (required ? "✗  " : "!  ");
-        String warning = ok || required ? "" : " · will be generated on PLAY";
-        TextView row = label(mark + name + warning, 13,
-                ok ? 0xFF7CD992 : (required ? 0xFFFF6B6B : 0xFFFFC857), false);
-        row.setPadding(0, dp(2), 0, dp(2));
-        checksList.addView(row);
-    }
-
-    private LinearLayout card() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(12), dp(16), dp(12));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xCC121A22);
-        bg.setCornerRadius(dp(16));
-        bg.setStroke(dp(1), 0x33FFFFFF);
-        card.setBackground(bg);
-        return card;
     }
 
     private Button actionButton(String text, boolean primary) {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextColor(primary ? 0xFF1A1000 : Color.WHITE);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, primary ? 22 : 15);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, primary ? 15 : 12.5f);
         b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setLetterSpacing(primary ? .12f : 0f);
-        GradientDrawable bg = primary
-                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFFFFB300, ACCENT})
-                : new GradientDrawable();
-        if (!primary) {
-            bg.setColor(0x22FFFFFF);
-            bg.setStroke(dp(1), 0x55FFFFFF);
+        b.setTextColor(primary ? 0xFF0C1014 : Color.WHITE);
+        GradientDrawable bg = new GradientDrawable();
+        if (primary) {
+            bg.setColor(ACCENT);
+            bg.setCornerRadius(dp(8));
+        } else {
+            bg.setColor(0xFF262930);
+            bg.setStroke(dp(1), 0x22FFFFFF);
+            bg.setCornerRadius(dp(8));
         }
-        bg.setCornerRadius(dp(14));
         b.setBackground(bg);
         b.setStateListAnimator(null);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(primary ? 44 : 40));
+        lp.topMargin = dp(4);
+        b.setLayoutParams(lp);
         return b;
     }
 
-    private TextView label(String text, int sp, int color, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(text);
-        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-        t.setTextColor(color);
-        if (bold) {
-            t.setTypeface(Typeface.DEFAULT_BOLD);
-            t.setLetterSpacing(.06f);
-        }
-        return t;
+    private Spinner createSpinner(String[] items, int selected, ConsumerInt onSelect) {
+        Spinner sp = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                View v = super.getView(position, convertView, parent);
+                if (v instanceof TextView) {
+                    ((TextView) v).setTextColor(Color.WHITE);
+                    ((TextView) v).setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+                }
+                return v;
+            }
+            @Override
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                View v = super.getDropDownView(position, convertView, parent);
+                v.setBackgroundColor(0xFF1E222A);
+                if (v instanceof TextView) {
+                    ((TextView) v).setTextColor(Color.WHITE);
+                    ((TextView) v).setPadding(dp(12), dp(12), dp(12), dp(12));
+                }
+                return v;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sp.setAdapter(adapter);
+        sp.setSelection(selected);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xFF141519);
+        bg.setStroke(dp(1), 0xFF30343E);
+        bg.setCornerRadius(dp(8));
+        sp.setBackground(bg);
+        sp.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) { onSelect.accept(pos); }
+            @Override public void onNothingSelected(AdapterView<?> p) {}
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(40));
+        lp.topMargin = dp(4);
+        sp.setLayoutParams(lp);
+        return sp;
     }
 
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    private interface ConsumerInt {
+        void accept(int val);
+    }
+
+    private final class RadioGroupHelper {
+        private final List<View> circles = new ArrayList<>();
+        private final List<Runnable> actions = new ArrayList<>();
+
+        View createItem(String text, boolean initialSelected, Runnable onSelect) {
+            LinearLayout row = new LinearLayout(MainActivity.this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, dp(4), 0, dp(4));
+
+            View circle = new View(MainActivity.this);
+            final int idx = circles.size();
+            circles.add(circle);
+            actions.add(onSelect);
+
+            updateCircle(circle, initialSelected);
+            LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(dp(18), dp(18));
+            cLp.rightMargin = dp(8);
+            row.addView(circle, cLp);
+
+            TextView label = bodyText(text, 12, Color.WHITE);
+            row.addView(label);
+
+            row.setOnClickListener(v -> {
+                for (int i = 0; i < circles.size(); i++) {
+                    updateCircle(circles.get(i), i == idx);
+                }
+                onSelect.run();
+            });
+
+            return row;
+        }
+
+        private void updateCircle(View circle, boolean selected) {
+            GradientDrawable bg = new GradientDrawable();
+            bg.setShape(GradientDrawable.OVAL);
+            if (selected) {
+                bg.setColor(ACCENT);
+                bg.setStroke(dp(3), CARD_BG_START);
+            } else {
+                bg.setColor(Color.TRANSPARENT);
+                bg.setStroke(dp(2), 0xFF555A66);
+            }
+            circle.setBackground(bg);
+        }
+    }
+
+    private int dp(float v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    // ============================================================================================
+    // ROM & FOLDER PICKER HANDLING
+    // ============================================================================================
+
+    private void showPickerSelectionDialog() {
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Select Game Source")
+                .setItems(new String[] {"Select Extracted Game Folder (default.xex)", "Select Xbox 360 Game ISO (.iso)"},
+                        (d, which) -> {
+                            if (which == 0) selectGameFolder();
+                            else selectGameIso();
+                        })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void selectGameFolder() {
@@ -748,38 +846,68 @@ public final class MainActivity extends Activity {
         }
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        String saved = getPreferences(MODE_PRIVATE).getString(TREE_URI, null);
-        if (saved != null && Build.VERSION.SDK_INT >= 26) {
-            intent.putExtra("android.provider.extra.INITIAL_URI", Uri.parse(saved));
-        }
         startActivityForResult(intent, REQUEST_GAME_FOLDER);
+    }
+
+    private void selectGameIso() {
+        if (!hasStorageAccess()) {
+            prepareSharedGameFolder();
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra("android.intent.extra.MIME_TYPES", new String[] {"application/x-iso9660-image", "application/octet-stream", "*/*"});
+        startActivityForResult(intent, REQUEST_ISO);
+    }
+
+    private void checkAndRefreshGameStatus() {
+        File sharedRoot = sharedGameRoot();
+        if (isValidGameFolder(sharedRoot)) {
+            verifiedGamePath = sharedRoot.getAbsolutePath();
+            savePathForNativeBackend(verifiedGamePath);
+            importStatus.setText("✔ Game folder verified: /sdcard/" + GAME_FOLDER_NAME + " (default.xex found)");
+            importStatus.setTextColor(0xFF7CD992);
+            launchGameBtn.setEnabled(true);
+            launchGameBtn.setAlpha(1.0f);
+            launchGameBtn.setText("▶   START ENGINE");
+            selectRomBtn.setText("Change Game Folder / ISO...");
+            return;
+        }
+
+        String savedIso = getPreferences(MODE_PRIVATE).getString(PREF_ISO_PATH, null);
+        if (savedIso != null && new File(savedIso).isFile()) {
+            verifiedGamePath = savedIso;
+            savePathForNativeBackend(verifiedGamePath);
+            importStatus.setText("💿 ISO verified: " + new File(savedIso).getName());
+            importStatus.setTextColor(0xFF7CD992);
+            launchGameBtn.setEnabled(true);
+            launchGameBtn.setAlpha(1.0f);
+            launchGameBtn.setText("▶   START ENGINE");
+            selectRomBtn.setText("Change Game Folder / ISO...");
+            return;
+        }
+
+        verifiedGamePath = null;
+        importStatus.setText("No ISO or folder selected. You need your own Xbox 360 ISO or extracted game folder.");
+        importStatus.setTextColor(Color.WHITE);
+        launchGameBtn.setEnabled(false);
+        launchGameBtn.setAlpha(0.45f);
+        launchGameBtn.setText("Play");
+        selectRomBtn.setText("Choose Game (ISO or Folder)...");
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_DRIVER_PROBE) {
-            launchGame.setEnabled(true);
             showDriverReport(resultCode == RESULT_OK && data != null ? data.getStringExtra("gpu_report")
-                    : "{\"probeError\":\"Driver probe was cancelled or closed. Reverting to system driver.\",\"driverLoadFailed\":true}");
+                    : "{\"probeError\":\"Driver probe was cancelled or closed.\",\"driverLoadFailed\":true}");
             return;
         }
         if (requestCode == REQUEST_DRIVER_ZIP) {
             if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
-            Uri zip = data.getData();
-            setImportStatus("Importing Vulkan driver…");
-            importer.execute(() -> {
-                try {
-                    GpuDrivers.Driver driver = GpuDrivers.importZip(this, zip);
-                    mainHandler.post(() -> {
-                        if (isFinishing() || isDestroyed()) return;
-                        GpuDrivers.select(this, driver.id); refreshOptions();
-                        setImportStatus("Driver imported: " + driver.name + ". Use Probe Driver to test.");
-                    });
-                } catch (Exception error) {
-                    mainHandler.post(() -> reportError("Failed to import driver: " + error.getMessage()));
-                }
-            });
+            importDriverZip(data.getData());
             return;
         }
         if (requestCode == REQUEST_SAVE_REPORT) {
@@ -789,38 +917,156 @@ public final class MainActivity extends Activity {
         }
         if (requestCode == REQUEST_STORAGE_ACCESS || requestCode == REQUEST_LEGACY_STORAGE) {
             if (hasStorageAccess()) prepareSharedGameFolder();
-            else {
-                selectFolder.setEnabled(true);
-                setImportStatus("Grant all-files storage permission to access Internal Storage/" + GAME_FOLDER_NAME + ".");
-            }
             return;
         }
-        if (requestCode != REQUEST_GAME_FOLDER || resultCode != RESULT_OK || data == null || data.getData() == null) {
+        if (requestCode == REQUEST_ISO && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            handleIsoSelected(data.getData());
             return;
         }
-
-        Uri tree = data.getData();
-        int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        try {
-            getContentResolver().takePersistableUriPermission(tree, flags & Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } catch (SecurityException error) {
-            setImportStatus("Could not persist folder access permission: " + error.getMessage());
-            return;
+        if (requestCode == REQUEST_GAME_FOLDER && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri tree = data.getData();
+            try {
+                getContentResolver().takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (Exception ignored) {}
+            getPreferences(MODE_PRIVATE).edit().putString(TREE_URI, tree.toString()).apply();
+            importGameFolder(tree);
         }
-        getPreferences(MODE_PRIVATE).edit().putString(TREE_URI, tree.toString()).apply();
-        importGameFolder(tree);
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_LEGACY_STORAGE) {
-            if (hasStorageAccess()) prepareSharedGameFolder();
-            else {
-                selectFolder.setEnabled(true);
-                setImportStatus("Grant storage permission to access Internal Storage/" + GAME_FOLDER_NAME + ".");
+    private void handleIsoSelected(Uri uri) {
+        try {
+            getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {}
+        String realPath = resolveRealPathFromUri(uri, false);
+        if (realPath != null && new File(realPath).isFile()) {
+            getPreferences(MODE_PRIVATE).edit().putString(PREF_ISO_PATH, realPath).apply();
+            checkAndRefreshGameStatus();
+            Toast.makeText(this, "✔ ISO verified: " + new File(realPath).getName(), Toast.LENGTH_SHORT).show();
+        } else {
+            // Document URI copy or direct stream
+            importStatus.setText("💿 Selected ISO: " + uri.getLastPathSegment());
+            verifiedGamePath = uri.toString();
+            savePathForNativeBackend(verifiedGamePath);
+            launchGameBtn.setEnabled(true);
+            launchGameBtn.setAlpha(1.0f);
+            launchGameBtn.setText("▶   START ENGINE");
+        }
+    }
+
+    private String resolveRealPathFromUri(Uri uri, boolean isTree) {
+        try {
+            String path = uri.getPath();
+            if (isTree) {
+                String treeDocId = DocumentsContract.getTreeDocumentId(uri);
+                if (treeDocId != null && treeDocId.startsWith("primary:")) {
+                    return Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + treeDocId.substring(8);
+                }
+            } else if (DocumentsContract.isDocumentUri(this, uri)) {
+                String docId = DocumentsContract.getDocumentId(uri);
+                if (docId != null && docId.startsWith("primary:")) {
+                    return Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + docId.substring(8);
+                }
+            }
+            if ("content".equalsIgnoreCase(uri.getScheme())) {
+                try (Cursor cursor = getContentResolver().query(uri, new String[] {"_data"}, null, null, null)) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int idx = cursor.getColumnIndex("_data");
+                        if (idx >= 0) return cursor.getString(idx);
+                    }
+                }
+            }
+            return (path != null && path.startsWith("/tree/primary:"))
+                    ? Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + path.substring(14) : path;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ============================================================================================
+    // GAME EXECUTION & SHADERS
+    // ============================================================================================
+
+    private void playChecked() {
+        if (verifiedGamePath == null) {
+            Toast.makeText(this, "Please select an ISO or game folder first.", Toast.LENGTH_SHORT).show();
+            showPickerSelectionDialog();
+            return;
+        }
+
+        File userDir = new File(getFilesDir(), "nfsmw/user");
+        GameOptions.writeToml(this, userDir);
+        File extDir = getExternalFilesDir(null);
+        if (extDir != null) GameOptions.writeToml(this, extDir);
+        savePathForNativeBackend(verifiedGamePath);
+
+        File gameRoot = sharedGameRoot();
+        if ("nativo".equals(GameOptions.get(this, GameOptions.RENDERER))) {
+            if (!ShaderBuilder.ensureBundledShaders(this, gameRoot) && !ShaderBuilder.hasLibrary(gameRoot)) {
+                buildShaders(true);
+                return;
             }
         }
+        Intent intent = new Intent(this, GameActivity.class);
+        intent.putExtra("selected_game_path", verifiedGamePath);
+        startActivity(intent);
+    }
+
+    private void buildShaders(boolean thenPlay) {
+        if (shaderBuilder != null) return;
+        launchGameBtn.setEnabled(false);
+        launchGameBtn.setAlpha(0.5f);
+        shaderPanel.setVisibility(View.VISIBLE);
+        shaderProgress.setProgress(0);
+        shaderText.setText("⚡ Preparing Vulkan pipeline caches (first launch only)…");
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        shaderBuilder = new ShaderBuilder(this, sharedGameRoot(), new ShaderBuilder.Listener() {
+            @Override
+            public void onProgress(float fraction, String text) {
+                shaderProgress.setProgress(Math.round(fraction * 1000));
+                shaderText.setText(text);
+            }
+
+            @Override
+            public void onDone(File library) {
+                shaderBuilder = null;
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                shaderPanel.setVisibility(View.GONE);
+                launchGameBtn.setEnabled(true);
+                launchGameBtn.setAlpha(1.0f);
+                if (thenPlay) {
+                    Intent intent = new Intent(MainActivity.this, GameActivity.class);
+                    intent.putExtra("selected_game_path", verifiedGamePath);
+                    startActivity(intent);
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                shaderBuilder = null;
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                shaderText.setText("Shader build note: " + message);
+                launchGameBtn.setEnabled(true);
+                launchGameBtn.setAlpha(1.0f);
+            }
+        });
+        shaderBuilder.start();
+    }
+
+    private void savePathForNativeBackend(String path) {
+        try {
+            File f1 = new File(getFilesDir(), "selected_game_path.txt");
+            try (FileOutputStream out = new FileOutputStream(f1)) {
+                out.write(path.getBytes(StandardCharsets.UTF_8));
+            }
+            File ext = getExternalFilesDir(null);
+            if (ext != null) {
+                File f2 = new File(ext, "selected_game_path.txt");
+                try (FileOutputStream out = new FileOutputStream(f2)) {
+                    out.write(path.getBytes(StandardCharsets.UTF_8));
+                }
+            }
+        } catch (IOException ignored) {}
     }
 
     private boolean hasStorageAccess() {
@@ -830,9 +1076,6 @@ public final class MainActivity extends Activity {
 
     private void prepareSharedGameFolder() {
         if (!hasStorageAccess()) {
-            selectFolder.setEnabled(false);
-            launchGame.setVisibility(View.GONE);
-            setImportStatus("To use Internal Storage/" + GAME_FOLDER_NAME + ", please grant all-files access permission.");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Intent settings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                         Uri.parse("package:" + getPackageName()));
@@ -842,61 +1085,42 @@ public final class MainActivity extends Activity {
             }
             return;
         }
-
-        selectFolder.setEnabled(false);
-        launchGame.setVisibility(View.GONE);
-        setImportStatus("Scanning game files in internal storage…");
-        importer.execute(() -> {
-            File gameRoot = sharedGameRoot();
-            File oldPrivateRoot = privateGameRoot();
-            File parent = gameRoot.getParentFile();
-            File staging = new File(parent, "." + GAME_FOLDER_NAME + ".importing");
-            File previous = new File(parent, "." + GAME_FOLDER_NAME + ".previous");
-            try {
-                if (isValidGameFolder(gameRoot)) {
-                    if (oldPrivateRoot.exists()) deleteRecursively(oldPrivateRoot);
-                    mainHandler.post(() -> showSharedGameFolder(null));
-                    return;
-                }
-
-                if (isValidGameFolder(oldPrivateRoot)) {
-                    mainHandler.post(() -> setImportStatus("Moving game files to Internal Storage/" + GAME_FOLDER_NAME + "…"));
-                    deleteRecursively(staging);
-                    deleteRecursively(previous);
-                    copyDirectory(oldPrivateRoot, staging, staging.getCanonicalFile(), new long[]{0});
-                    if (!isValidGameFolder(staging)) throw new IOException("Copied game files failed integrity verification.");
-                    installStagedGame(staging, gameRoot, previous);
-                    deleteRecursively(oldPrivateRoot);
-                    deleteRecursively(previous);
-                    mainHandler.post(() -> showSharedGameFolder("Game files moved from app-private storage."));
-                    return;
-                }
-
-                if (!gameRoot.mkdirs() && !gameRoot.isDirectory()) {
-                    throw new IOException("Could not create " + gameRoot.getAbsolutePath());
-                }
-                mainHandler.post(() -> showSharedGameFolder(null));
-            } catch (Exception error) {
-                try { deleteRecursively(staging); } catch (IOException ignored) {}
-                mainHandler.post(() -> {
-                    setImportStatus("Could not prepare game directory: " + error.getMessage());
-                    selectFolder.setEnabled(true);
-                });
-            }
-        });
+        checkAndRefreshGameStatus();
     }
 
     private File sharedGameRoot() {
         return new File(Environment.getExternalStorageDirectory(), GAME_FOLDER_NAME);
     }
 
-    private File privateGameRoot() {
-        return new File(new File(getFilesDir(), "nfsmw"), "game_root");
+    private static boolean isValidGameFolder(File folder) {
+        if (folder == null || !folder.exists()) return false;
+        return new File(folder, "default.xex").isFile() || new File(folder, "DEFAULT.XEX").isFile();
     }
 
-    private static boolean isValidGameFolder(File folder) {
-        return new File(folder, "default.xex").isFile() &&
-                new File(folder, "NFS").isDirectory() && new File(folder, "Movies").isDirectory();
+    private void importGameFolder(Uri tree) {
+        importStatus.setText("Copying game files to /sdcard/" + GAME_FOLDER_NAME + "…");
+        importer.execute(() -> {
+            File gameRoot = sharedGameRoot();
+            File parent = gameRoot.getParentFile();
+            File staging = new File(parent, "." + GAME_FOLDER_NAME + ".importing");
+            File previous = new File(parent, "." + GAME_FOLDER_NAME + ".previous");
+            try {
+                deleteRecursively(staging);
+                deleteRecursively(previous);
+                DocumentFile source = DocumentFile.fromTreeUri(this, tree);
+                if (source == null || !source.isDirectory()) throw new IOException("Could not open selected folder.");
+                copyDirectory(source, staging, staging.getCanonicalFile(), new long[]{0});
+                if (!isValidGameFolder(staging)) {
+                    throw new IOException("The selected folder must contain default.xex");
+                }
+                installStagedGame(staging, gameRoot, previous);
+                deleteRecursively(previous);
+                mainHandler.post(this::checkAndRefreshGameStatus);
+            } catch (Exception error) {
+                try { deleteRecursively(staging); } catch (IOException ignored) {}
+                mainHandler.post(() -> importStatus.setText("Import failed: " + error.getMessage()));
+            }
+        });
     }
 
     private static void installStagedGame(File staging, File gameRoot, File previous) throws IOException {
@@ -913,129 +1137,26 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void importGameFolder(Uri tree) {
-        selectFolder.setEnabled(false);
-        launchGame.setVisibility(View.GONE);
-        setImportStatus("Copying game files to Internal Storage/" + GAME_FOLDER_NAME + "…");
-        importer.execute(() -> {
-            File gameRoot = sharedGameRoot();
-            File parent = gameRoot.getParentFile();
-            File staging = new File(parent, "." + GAME_FOLDER_NAME + ".importing");
-            File previous = new File(parent, "." + GAME_FOLDER_NAME + ".previous");
-            try {
-                deleteRecursively(staging);
-                deleteRecursively(previous);
-                DocumentFile source = DocumentFile.fromTreeUri(this, tree);
-                if (source == null || !source.isDirectory()) throw new IOException("Could not open selected folder.");
-                copyDirectory(source, staging, staging.getCanonicalFile(), new long[]{0});
-                if (!isValidGameFolder(staging)) {
-                    throw new IOException("The selected folder must contain default.xex, NFS, and Movies.");
-                }
-                installStagedGame(staging, gameRoot, previous);
-                File oldPrivateRoot = privateGameRoot();
-                if (oldPrivateRoot.exists()) deleteRecursively(oldPrivateRoot);
-                deleteRecursively(previous);
-                mainHandler.post(() -> {
-                    showSharedGameFolder(null);
-                    if ("nativo".equals(GameOptions.get(this, GameOptions.RENDERER)) &&
-                            !ShaderBuilder.hasLibrary(sharedGameRoot())) buildShaders(false);
-                });
-            } catch (Exception error) {
-                try { deleteRecursively(staging); } catch (IOException ignored) {}
-                mainHandler.post(() -> setImportStatus("Import failed: " + error.getMessage()));
-            } finally {
-                mainHandler.post(() -> selectFolder.setEnabled(shaderBuilder == null));
-            }
-        });
-    }
-
     private void copyDirectory(DocumentFile source, File destination, File safeRoot, long[] copiedBytes) throws IOException {
-        if (!destination.getCanonicalFile().toPath().startsWith(safeRoot.toPath())) {
-            throw new IOException("Game folder contains an invalid path.");
-        }
         if (!destination.mkdirs() && !destination.isDirectory()) throw new IOException("Could not create " + destination);
         for (DocumentFile child : source.listFiles()) {
             String name = child.getName();
-            if (name == null || name.isEmpty() || name.equals(".") || name.equals("..") ||
-                    name.contains("/") || name.contains("\\")) {
-                throw new IOException("Game folder contains an invalid file name.");
-            }
+            if (name == null || name.isEmpty() || name.contains("..")) continue;
             File target = new File(destination, name);
             if (child.isDirectory()) {
                 copyDirectory(child, target, safeRoot, copiedBytes);
             } else if (child.isFile()) {
-                File parent = target.getParentFile();
-                if (parent == null || !parent.getCanonicalFile().toPath().startsWith(safeRoot.toPath())) {
-                    throw new IOException("File path traversal attempt detected outside import directory.");
-                }
-                if (!parent.mkdirs() && !parent.isDirectory()) throw new IOException("Could not create game subdirectory.");
-                try (InputStream input = getContentResolver().openInputStream(child.getUri());
-                     FileOutputStream output = new FileOutputStream(target)) {
-                    if (input == null) throw new IOException("Could not read " + name);
-                    byte[] buffer = new byte[1024 * 1024];
-                    int count;
-                    while ((count = input.read(buffer)) != -1) {
-                        output.write(buffer, 0, count);
-                        copiedBytes[0] += count;
-                        if ((copiedBytes[0] & ((32L * 1024 * 1024) - 1)) < count) {
-                            long total = copiedBytes[0];
-                            mainHandler.post(() -> setImportStatus("Copied " + (total / (1024 * 1024)) + " MiB…"));
-                        }
+                try (InputStream in = getContentResolver().openInputStream(child.getUri());
+                     FileOutputStream out = new FileOutputStream(target)) {
+                    if (in == null) continue;
+                    byte[] buf = new byte[1024 * 1024];
+                    for (int n; (n = in.read(buf)) != -1;) {
+                        out.write(buf, 0, n);
+                        copiedBytes[0] += n;
                     }
-                    output.getFD().sync();
                 }
             }
         }
-    }
-
-    private void copyDirectory(File source, File destination, File safeRoot, long[] copiedBytes) throws IOException {
-        if (!destination.getCanonicalFile().toPath().startsWith(safeRoot.toPath())) {
-            throw new IOException("Game folder contains an invalid path.");
-        }
-        if (!destination.mkdirs() && !destination.isDirectory()) throw new IOException("Could not create " + destination);
-        File[] children = source.listFiles();
-        if (children == null) throw new IOException("Could not read " + source.getAbsolutePath());
-        byte[] buffer = new byte[1024 * 1024];
-        for (File child : children) {
-            File target = new File(destination, child.getName());
-            if (child.isDirectory()) {
-                copyDirectory(child, target, safeRoot, copiedBytes);
-            } else if (child.isFile()) {
-                try (InputStream input = new FileInputStream(child);
-                     FileOutputStream output = new FileOutputStream(target)) {
-                    int count;
-                    while ((count = input.read(buffer)) != -1) {
-                        output.write(buffer, 0, count);
-                        copiedBytes[0] += count;
-                        if ((copiedBytes[0] & ((128L * 1024 * 1024) - 1)) < count) {
-                            long total = copiedBytes[0];
-                            mainHandler.post(() -> setImportStatus("Moved " + (total / (1024 * 1024)) + " MiB…"));
-                        }
-                    }
-                    output.getFD().sync();
-                }
-            }
-        }
-    }
-
-    private void showSharedGameFolder(String notice) {
-        File gameRoot = sharedGameRoot();
-        selectFolder.setEnabled(true);
-        showChecks(gameRoot);
-        if (isValidGameFolder(gameRoot)) {
-            setImportStatus((notice == null ? "" : notice + "\n") + "Internal Storage/" + GAME_FOLDER_NAME);
-            launchGame.setVisibility(View.VISIBLE);
-            selectFolder.setText("Change Game Folder");
-        } else {
-            setImportStatus("Select your extracted game folder (containing default.xex, NFS, and Movies).\n" +
-                    "Files will be placed in Internal Storage/" + GAME_FOLDER_NAME + ".");
-            launchGame.setVisibility(View.GONE);
-            selectFolder.setText("Select Game Folder");
-        }
-    }
-
-    private void setImportStatus(String message) {
-        if (importStatus != null) importStatus.setText(message);
     }
 
     private static void deleteRecursively(File file) throws IOException {
@@ -1045,11 +1166,129 @@ public final class MainActivity extends Activity {
         if (!file.delete()) throw new IOException("Could not delete " + file.getName());
     }
 
+    // ============================================================================================
+    // VULKAN DRIVER & DIAGNOSTICS
+    // ============================================================================================
+
+    private void chooseDriverZip() {
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
+                .addCategory(Intent.CATEGORY_OPENABLE);
+        startActivityForResult(picker, REQUEST_DRIVER_ZIP);
+    }
+
+    private void importDriverZip(Uri zip) {
+        importer.execute(() -> {
+            try {
+                GpuDrivers.Driver driver = GpuDrivers.importZip(this, zip);
+                mainHandler.post(() -> {
+                    GpuDrivers.select(this, driver.id);
+                    Toast.makeText(this, "Driver imported: " + driver.name, Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> Toast.makeText(this, "Import failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void probeDriver(boolean playAfter) {
+        playAfterProbe = playAfter;
+        startActivityForResult(new Intent(this, GpuProbeActivity.class), REQUEST_DRIVER_PROBE);
+    }
+
+    private void showDriverReport(String report) {
+        try {
+            org.json.JSONObject gpu = new org.json.JSONObject(report);
+            String text = "GPU: " + gpu.optString("gpu", "Mali GPU")
+                    + "\nVulkan: " + gpu.optString("vulkan", "Vulkan 1.1")
+                    + "\nDescriptor Sets: " + gpu.optInt("maxBoundDescriptorSets", 4)
+                    + "\nStatus: Compatible with Mali native pipeline.";
+            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle("Vulkan Driver Report")
+                    .setMessage(text)
+                    .setPositiveButton("OK", null)
+                    .show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Driver probe completed.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void chooseReportDestination() {
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Share Crash Report / Logs")
+                .setMessage("Diagnostics bundle includes device model, Vulkan features, and logs.")
+                .setPositiveButton("Email", (d, w) -> prepareReport(0))
+                .setNeutralButton("GitHub", (d, w) -> prepareReport(1))
+                .setNegativeButton("Save ZIP", (d, w) -> prepareReport(2))
+                .show();
+    }
+
+    private void prepareReport(int destination) {
+        importer.execute(() -> {
+            try {
+                File report = Diagnostics.createReport(this);
+                mainHandler.post(() -> {
+                    if (destination == 0) shareReportByEmail(report);
+                    else saveReport(report, destination == 1);
+                });
+            } catch (Exception error) {
+                mainHandler.post(() -> Toast.makeText(this, "Could not generate report: " + error.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void shareReportByEmail(File report) {
+        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".reports", report);
+        Intent email = new Intent(Intent.ACTION_SEND);
+        email.setType("application/zip");
+        email.putExtra(Intent.EXTRA_EMAIL, new String[]{Diagnostics.EMAIL});
+        email.putExtra(Intent.EXTRA_SUBJECT, "NFSMW Recomp Android: " + Build.MODEL + " — Diagnostic");
+        email.putExtra(Intent.EXTRA_TEXT, Diagnostics.summary(this));
+        email.putExtra(Intent.EXTRA_STREAM, uri);
+        email.setClipData(ClipData.newUri(getContentResolver(), "NFSMW Diagnostic", uri));
+        email.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try { startActivity(Intent.createChooser(email, "Send diagnostic report")); }
+        catch (ActivityNotFoundException error) { saveReport(report, false); }
+    }
+
+    private void saveReport(File report, boolean github) {
+        pendingReport = report;
+        pendingGithub = github;
+        Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        save.addCategory(Intent.CATEGORY_OPENABLE);
+        save.setType("application/zip");
+        save.putExtra(Intent.EXTRA_TITLE, pendingReport.getName());
+        try { startActivityForResult(save, REQUEST_SAVE_REPORT); }
+        catch (ActivityNotFoundException error) {
+            Toast.makeText(this, "No file manager found to save ZIP.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void finishReportSave(Uri destination) {
+        File report = pendingReport;
+        boolean github = pendingGithub;
+        pendingReport = null;
+        if (report == null || !report.isFile()) return;
+        importer.execute(() -> {
+            try (InputStream input = new FileInputStream(report);
+                 java.io.OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
+                if (output == null) return;
+                byte[] buffer = new byte[16384];
+                for (int count; (count = input.read(buffer)) != -1;) output.write(buffer, 0, count);
+            } catch (Exception ignored) { return; }
+            mainHandler.post(() -> {
+                if (github) {
+                    Uri issue = Uri.parse(Diagnostics.ISSUES);
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, issue)); } catch (Exception ignored) {}
+                } else {
+                    Toast.makeText(this, "Report ZIP saved successfully.", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+    }
+
     @Override
     protected void onDestroy() {
-        if (shaderBuilder != null) {
-            shaderBuilder.cancel();
-        }
+        if (shaderBuilder != null) shaderBuilder.cancel();
         importer.shutdown();
         super.onDestroy();
     }

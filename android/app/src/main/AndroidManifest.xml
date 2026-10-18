@@ -38,6 +38,12 @@
             android:process=":gpu_probe" android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity
+            android:name=".TouchControlsEditorActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+            android:exported="false" />
+        <activity
             android:name=".GameActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:exported="false"
