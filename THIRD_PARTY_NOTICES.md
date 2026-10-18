@@ -66,7 +66,7 @@ repository.
 This project adheres to emerging open-source software transparency frameworks (including SPDX `ai-assisted` specifications and W3C AI Content Disclosure conventions).
 
 ### Scope and Tooling
-- **AI Tooling Used:** Google Antigravity and Anthropic Claude.
+- **AI Tooling Used:** Google Antigravity.
 - **Specific Tasks Assisted:**
   - Disassembly analysis of ARM64 and PowerPC native recompilation binaries (`libmain.so`, `librexruntime.so`).
   - Memory-safe cave generation and trampoline calculation (`tools/patch_cave_presentar.py`).

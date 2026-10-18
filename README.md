@@ -99,7 +99,7 @@ python3 tools/aot/transcode_audio.py /path/to/audio/ /path/to/output_audio/ --fo
 
 In alignment with open-source transparency initiatives and AI research disclosure conventions (such as W3C Content Disclosure and SPDX `ai-assisted` standards), this project explicitly discloses the use of generative AI assistance:
 
-- **Tools Utilized:** Google Antigravity and Anthropic Claude.
+- **Tool Utilized:** Google Antigravity.
 - **Scope of Assistance:**
   - Automated binary disassembly analysis (ARM64 and PowerPC decompilation tracing).
   - Vulkan descriptor set merge diagnosis and memory-efficient trampoline cave calculations.
