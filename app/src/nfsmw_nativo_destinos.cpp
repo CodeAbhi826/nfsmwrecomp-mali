@@ -2181,8 +2181,32 @@ class DestinosVulkan final : public DestinosNativos, public ContextoDestinos {
     }
     auto it = resueltas_.find(base);
     if (it == resueltas_.end() || !it->second.imagen.preparada) {
-      Rechazar(4, "Swap sin textura resuelta: se pinta el color de prueba");
-      return false;
+      // Android / Mali fallback: when guest frontbuffer address is not explicitly registered in resueltas_,
+      // select the primary rendered color target (wide landscape aspect ratio with maximum surface area).
+      auto best_it = resueltas_.end();
+      uint64_t best_area = 0;
+      for (auto check_it = resueltas_.begin(); check_it != resueltas_.end(); ++check_it) {
+        const auto& target = check_it->second;
+        if (!target.imagen.preparada || EsProfundidadFormato(target.imagen.formato) ||
+            target.imagen.vista == VK_NULL_HANDLE) {
+          continue;
+        }
+        if (target.imagen.ancho > target.imagen.alto && target.imagen.ancho >= 800) {
+          const uint64_t area = static_cast<uint64_t>(target.imagen.ancho) * target.imagen.alto;
+          if (area > best_area) {
+            best_area = area;
+            best_it = check_it;
+          }
+        }
+      }
+      if (best_it != resueltas_.end()) {
+        it = best_it;
+      } else if (!resueltas_.empty()) {
+        it = resueltas_.begin();
+      } else {
+        Rechazar(4, "Swap sin textura resuelta: se pinta el color de prueba");
+        return false;
+      }
     }
     Resuelta& resuelta = it->second;
     const uint32_t w = std::min(ancho ? ancho : resuelta.imagen.ancho, resuelta.imagen.ancho);

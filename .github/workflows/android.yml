@@ -1,8 +1,10 @@
-name: Android ARM64
+name: Android ARM64 (Malicomp)
 
 on:
   push:
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -17,10 +19,10 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android SDK components
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
-      - name: Build ARM64 debug APK
+      - name: Build ARM64 APK
         working-directory: android
         run: ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: nfsmw-android-arm64-debug
+          name: malicomp-android-arm64
           path: android/app/build/outputs/apk/debug/app-debug.apk

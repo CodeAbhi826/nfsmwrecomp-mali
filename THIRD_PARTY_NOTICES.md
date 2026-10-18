@@ -61,6 +61,22 @@ and packer from `shaders/`, libmspack (LZX), and [DirectXShaderCompiler](https:/
 v2025.1 (University of Illinois/NCSA Open Source License, with LLVM's license terms). Its own notices are in that
 repository.
 
+## AI Assistance & Research Disclosure
+
+This project adheres to emerging open-source software transparency frameworks (including SPDX `ai-assisted` specifications and W3C AI Content Disclosure conventions).
+
+### Scope and Tooling
+- **AI Tooling Used:** Google Antigravity and Anthropic Claude.
+- **Specific Tasks Assisted:**
+  - Disassembly analysis of ARM64 and PowerPC native recompilation binaries (`libmain.so`, `librexruntime.so`).
+  - Memory-safe cave generation and trampoline calculation (`tools/patch_cave_presentar.py`).
+  - Analysis of Vulkan descriptor indexing constraints and descriptor set allocation limits (`maxBoundDescriptorSets == 4`).
+  - Scripting of offline Ahead-Of-Time (AOT) transcode utilities (`tools/aot/`).
+  - Documentation drafting and GitHub Actions CI configuration.
+
+### Human Review and Hardware Ground Truth
+All AI-suggested modifications were subjected to rigorous engineering review, manual code audits, and live hardware verification on a physical test device (**Samsung Galaxy A20**, Exynos 7884B, Mali-G71 MP2 Bifrost GPU, Android 11). No AI output was committed without live telemetry validation, memory footprint inspection, and visual frame confirmation.
+
 ## Trademarks
 
 Need for Speed and Need for Speed: Most Wanted are trademarks of Electronic Arts Inc. Nintendo Switch is a trademark of

@@ -1,4 +1,4 @@
-﻿// nfsmw - native renderer, steps C3, C4, C5c and C6 (see nfsmw_nativo_dibujos.h).
+// nfsmw - native renderer, steps C3, C4, C5c and C6 (see nfsmw_nativo_dibujos.h).
 //
 // What it covers
 //   - Shaders: modules of the NFSSPV library with the XenosRecomp interface
@@ -3719,8 +3719,9 @@ class DibujosVulkanImpl final : public DibujosVulkan {
       pipeline_enlazado_ = pipeline;
       clave_enlazada_valida_ = false;  // the counter does not classify this bind
     }
-    if (!sets_enlazados_) {
-      // PARCHE LOCAL (NFSMW Recompiled): los montones que haya (4 conjuntos: 3).
+    // PARCHE LOCAL (NFSMW Recompiled / Malicomp): Rebind descriptor sets whenever sets are not yet bound,
+    // or on 4-descriptor set architectures (Mali Bifrost) to prevent descriptor stream desynchronization on 2D quads.
+    if (!sets_enlazados_ || cuatro_conjuntos_) {
       NFSMW_SUB(1, dfn_.vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_pipeline_, 0,
                                                 n_sets_enlace_, sets_enlace_.data(), 0, nullptr));
       sets_enlazados_ = true;

@@ -37,6 +37,17 @@ android/app/.cxx/
 *.log
 *.err
 shaders/wasm/out/
+*.so
+*.dex
+*.apk
+*.zip
+build_work/
+dist/
+reports/
+extracted_apk/
+.agents/
+colab_*.py
+vkjson_*.json
 
 # --- Tools --------------------------------------------------------------------
 __pycache__/
