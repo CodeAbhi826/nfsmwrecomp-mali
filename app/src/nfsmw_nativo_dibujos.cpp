@@ -2210,20 +2210,21 @@ class DibujosVulkanImpl final : public DibujosVulkan {
 
   bool Inicializar() {
     const auto& propiedades = dispositivo_->properties();
+    const bool simular_11 = REXCVAR_GET(nfsmw_nativo_simular_vulkan11) || REXCVAR_GET(nfsmw_nativo_cuatro_conjuntos);
     const std::pair<bool, const char*> requisitos[] = {
         {propiedades.independentBlend, "independentBlend"},
-        {propiedades.runtimeDescriptorArray, "runtimeDescriptorArray"},
+        {propiedades.runtimeDescriptorArray || simular_11, "runtimeDescriptorArray"},
         {propiedades.shaderSampledImageArrayDynamicIndexing,
          "shaderSampledImageArrayDynamicIndexing"},
-        {propiedades.descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound"},
-        {propiedades.descriptorBindingSampledImageUpdateAfterBind,
+        {propiedades.descriptorBindingPartiallyBound || simular_11, "descriptorBindingPartiallyBound"},
+        {propiedades.descriptorBindingSampledImageUpdateAfterBind || simular_11,
          "descriptorBindingSampledImageUpdateAfterBind"},
-        {propiedades.descriptorBindingUpdateUnusedWhilePending,
+        {propiedades.descriptorBindingUpdateUnusedWhilePending || simular_11,
          "descriptorBindingUpdateUnusedWhilePending"},
     };
     for (const auto& [presente, nombre] : requisitos) {
       if (!presente) {
-        REXLOG_ERROR("[nativo] C6: el dispositivo Vulkan no tiene {}: no se dibuja", nombre);
+        REXLOG_ERROR("[nativo] C6: Vulkan device lacks {}: drawing disabled", nombre);
         return false;
       }
     }

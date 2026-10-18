@@ -269,24 +269,13 @@ public final class MainActivity extends Activity {
         card.addView(cardTitle("Display"));
         card.addView(goldLine());
 
-        card.addView(heading("Resolution"));
-        card.addView(bodyText("Size of the game image on screen. The game itself is rendered at native resolution.", 10.5f, TEXT_MUTED));
-        String curRes = GameOptions.get(this, GameOptions.RESOLUTION);
-        RadioGroupHelper resGroup = new RadioGroupHelper();
-        card.addView(resGroup.createItem("480p - 720x480", "854x480".equals(curRes), () -> {
-            GameOptions.set(this, GameOptions.RESOLUTION, "854x480");
-        }));
-        card.addView(resGroup.createItem("Native - 1280x720", !"854x480".equals(curRes), () -> {
-            GameOptions.set(this, GameOptions.RESOLUTION, "1280x720");
-        }));
-
         card.addView(switchRow("Stretch to full screen",
-                "Fill the whole screen without black bars, matching your phone's aspect ratio.",
+                "Fill the whole display without black bars, matching your phone's aspect ratio.",
                 ctrl.getBoolean("stretch", true),
                 (btn, on) -> ctrl.edit().putBoolean("stretch", on).apply()));
 
-        card.addView(switchRow("Show FPS",
-                "Shows current frames per second and minimum in-game.",
+        card.addView(switchRow("Show Live FPS HUD",
+                "Displays real-time in-game FPS and frame delivery timing in the top-left corner.",
                 ctrl.getBoolean("show_fps", false),
                 (btn, on) -> ctrl.edit().putBoolean("show_fps", on).apply()));
 
@@ -374,9 +363,9 @@ public final class MainActivity extends Activity {
         card.addView(renderGroup.createItem("1920x1080 - sharper", "1920x1080".equals(curRes), () -> GameOptions.set(this, GameOptions.RESOLUTION, "1920x1080")));
 
         // Frame rate limit
-        card.addView(heading("Frame rate limit"));
-        card.addView(bodyText("Target framerate cap for gameplay smoothness vs battery life.", 10.5f, TEXT_MUTED));
-        Spinner spFps = createSpinner(new String[] {"60 fps", "30 fps", "Unlocked"},
+        card.addView(heading("Framerate limit"));
+        card.addView(bodyText("Target framerate cap for gameplay smoothness vs battery and thermals.", 10.5f, TEXT_MUTED));
+        Spinner spFps = createSpinner(new String[] {"60 FPS (Smooth gameplay)", "30 FPS (Battery saver)"},
                 "30".equals(GameOptions.get(this, GameOptions.FPS)) ? 1 : 0,
                 pos -> GameOptions.set(this, GameOptions.FPS, pos == 1 ? "30" : "60"));
         card.addView(spFps);

@@ -31,9 +31,15 @@ public final class TouchControlsView extends View {
     static final int START = 0x0010, BACK = 0x0020, LTHUMB = 0x0040, RTHUMB = 0x0080;
     static final int LB = 0x0100, RB = 0x0200, A = 0x1000, B = 0x2000, X = 0x4000, Y = 0x8000;
 
-    private static final int BUTTON = 0, STICK = 1, DPAD = 2, PEDAL = 3, MENU = 4;
+    private static final int BUTTON = 0, STICK = 1, DPAD = 2, PILL = 3, MENU = 4;
     private static final int TRIGGER_NONE = 0, TRIGGER_LEFT = 1, TRIGGER_RIGHT = 2;
     private static final String PREFS = "nfsmw_controls";
+
+    private long lastFpsTime = 0;
+    private int frameCount = 0;
+    private float currentFps = 60.0f;
+    private float currentMs = 16.6f;
+    boolean showFps = false;
 
     static native void nativeSetTouchState(int buttons, int leftX, int leftY, int rightX, int rightY,
                                            int leftTrigger, int rightTrigger);
@@ -135,27 +141,34 @@ public final class TouchControlsView extends View {
     // ---- Layout ------------------------------------------------------------------------------------------
 
     private void createControls() {
-        final int grey = 0xFF2A3440;
-        // Left hand: steering stick, D-pad, LB.
-        add(new Control("ls", STICK, "", "STEER", 0, TRIGGER_NONE, grey, .15f, .70f, .40f, true));
-        add(new Control("dpad", DPAD, "", "", 0, TRIGGER_NONE, grey, .10f, .30f, .27f, true));
-        add(new Control("lb", BUTTON, "LB", "", LB, TRIGGER_NONE, grey, .07f, .09f, .13f, true));
-        // Right hand: pedals, A/B/X/Y diamond, RB.
-        add(new Control("rt", PEDAL, "GAS", "RT", 0, TRIGGER_RIGHT, 0xFF1E5E3A, .92f, .70f, .42f, true));
-        add(new Control("lt", PEDAL, "BRAKE", "LT", 0, TRIGGER_LEFT, 0xFF6B2323, .80f, .76f, .32f, true));
-        add(new Control("a", BUTTON, "A", "HANDBRAKE", A, TRIGGER_NONE, 0xFF2E7D32, .78f, .45f, .15f, true));
-        add(new Control("b", BUTTON, "B", "NOS", B, TRIGGER_NONE, 0xFFC62828, .87f, .36f, .15f, true));
-        add(new Control("x", BUTTON, "X", "CAMERA", X, TRIGGER_NONE, 0xFF1565C0, .69f, .36f, .15f, true));
-        add(new Control("y", BUTTON, "Y", "LOOK BACK", Y, TRIGGER_NONE, 0xFFF9A825, .78f, .27f, .15f, true));
-        add(new Control("rb", BUTTON, "RB", "", RB, TRIGGER_NONE, grey, .93f, .09f, .13f, true));
-        // Middle: Back, Start and the editor.
-        add(new Control("back", BUTTON, "BACK", "", BACK, TRIGGER_NONE, grey, .37f, .08f, .10f, true));
-        add(new Control("menu", MENU, "⚙", "", 0, TRIGGER_NONE, grey, .50f, .08f, .09f, true));
-        add(new Control("start", BUTTON, "START", "", START, TRIGGER_NONE, grey, .63f, .08f, .10f, true));
-        // Off by default: the camera stick and the stick clicks.
-        add(new Control("rs", STICK, "", "LOOK", 0, TRIGGER_NONE, grey, .55f, .72f, .30f, false));
-        add(new Control("l3", BUTTON, "L3", "", LTHUMB, TRIGGER_NONE, grey, .28f, .88f, .11f, false));
-        add(new Control("r3", BUTTON, "R3", "", RTHUMB, TRIGGER_NONE, grey, .45f, .88f, .11f, false));
+        final int grey = 0xFF18232E;
+        // Triggers and Bumpers (Top): Pill shape
+        add(new Control("lt", PILL, "LT", "", 0, TRIGGER_LEFT, grey, .07f, .09f, .11f, true));
+        add(new Control("lb", PILL, "LB", "", LB, TRIGGER_NONE, grey, .20f, .09f, .11f, true));
+        add(new Control("rb", PILL, "RB", "", RB, TRIGGER_NONE, grey, .81f, .09f, .11f, true));
+        add(new Control("rt", PILL, "RT", "", 0, TRIGGER_RIGHT, grey, .93f, .09f, .11f, true));
+
+        // Thumbstick Clicks (L3 / R3)
+        add(new Control("l3", BUTTON, "L3", "", LTHUMB, TRIGGER_NONE, grey, .07f, .48f, .11f, true));
+        add(new Control("r3", BUTTON, "R3", "", RTHUMB, TRIGGER_NONE, grey, .73f, .48f, .11f, true));
+
+        // Left Stick (with "L" on knob) & Cross D-Pad
+        add(new Control("ls", STICK, "L", "", 0, TRIGGER_NONE, grey, .16f, .74f, .36f, true));
+        add(new Control("dpad", DPAD, "", "", 0, TRIGGER_NONE, grey, .32f, .72f, .32f, true));
+
+        // Center: Back, Menu, Start
+        add(new Control("back", PILL, "BACK", "", BACK, TRIGGER_NONE, grey, .44f, .78f, .09f, true));
+        add(new Control("menu", MENU, "⚙", "", 0, TRIGGER_NONE, grey, .50f, .08f, .08f, true));
+        add(new Control("start", PILL, "START", "", START, TRIGGER_NONE, grey, .55f, .78f, .09f, true));
+
+        // Right Stick (with "R" on knob)
+        add(new Control("rs", STICK, "R", "", 0, TRIGGER_NONE, grey, .67f, .76f, .36f, true));
+
+        // Diamond A/B/X/Y Buttons (Right side)
+        add(new Control("y", BUTTON, "Y", "", Y, TRIGGER_NONE, grey, .85f, .60f, .13f, true));
+        add(new Control("x", BUTTON, "X", "", X, TRIGGER_NONE, grey, .81f, .68f, .13f, true));
+        add(new Control("b", BUTTON, "B", "", B, TRIGGER_NONE, grey, .89f, .68f, .13f, true));
+        add(new Control("a", BUTTON, "A", "", A, TRIGGER_NONE, grey, .85f, .76f, .13f, true));
     }
 
     private void add(Control c) {
@@ -169,6 +182,13 @@ public final class TouchControlsView extends View {
         tiltSensitivity = prefs.getFloat("tilt_sensitivity", tiltSensitivity);
         hideWithGamepad = prefs.getBoolean("hide_with_gamepad", hideWithGamepad);
         stretch = prefs.getBoolean("stretch", stretch);
+        showFps = prefs.getBoolean("show_fps", false);
+        int layoutVer = prefs.getInt("layout_version", 0);
+        if (layoutVer < 2) {
+            resetLayout();
+            save();
+            return;
+        }
         String json = prefs.getString("layout", null);
         if (json == null) {
             return;
@@ -201,6 +221,7 @@ public final class TouchControlsView extends View {
             return;
         }
         prefs.edit()
+                .putInt("layout_version", 2)
                 .putString("layout", all.toString())
                 .putFloat("opacity", opacity)
                 .putBoolean("haptics", haptics)
@@ -208,6 +229,7 @@ public final class TouchControlsView extends View {
                 .putFloat("tilt_sensitivity", tiltSensitivity)
                 .putBoolean("hide_with_gamepad", hideWithGamepad)
                 .putBoolean("stretch", stretch)
+                .putBoolean("show_fps", showFps)
                 .apply();
     }
 
@@ -474,8 +496,8 @@ public final class TouchControlsView extends View {
 
     private boolean contains(Control c, float px, float py, float slack) {
         float cx = c.x * getWidth(), cy = c.y * getHeight();
-        if (c.type == PEDAL) {
-            float halfW = pedalWidth(c) * .5f * slack, halfH = c.size * getHeight() * .5f * slack;
+        if (c.type == PILL) {
+            float halfW = pillWidth(c) * .5f * slack, halfH = pillHeight(c) * .5f * slack;
             return Math.abs(px - cx) <= halfW && Math.abs(py - cy) <= halfH;
         }
         return Math.hypot(px - cx, py - cy) <= radius(c) * slack;
@@ -485,8 +507,12 @@ public final class TouchControlsView extends View {
         return c.size * getHeight() * .5f;
     }
 
-    private float pedalWidth(Control c) {
-        return c.size * getHeight() * .55f;
+    private float pillWidth(Control c) {
+        return c.size * getHeight() * 1.8f;
+    }
+
+    private float pillHeight(Control c) {
+        return c.size * getHeight();
     }
 
     private void releaseAll() {
@@ -503,7 +529,7 @@ public final class TouchControlsView extends View {
     private int buttonState() {
         int buttons = 0;
         for (Control c : controls) {
-            if (c.type == BUTTON && c.pressed) {
+            if ((c.type == BUTTON || c.type == PILL) && c.pressed && c.mask != 0) {
                 buttons |= c.mask;
             } else if (c.type == DPAD) {
                 buttons |= c.dpad;
@@ -527,9 +553,9 @@ public final class TouchControlsView extends View {
                 } else if (c.type == STICK) {
                     rx = axis(c.knobX);
                     ry = axis(-c.knobY);
-                } else if (c.type == PEDAL && c.pressed) {
+                } else if (c.pressed) {
                     if (c.trigger == TRIGGER_LEFT) lt = 255;
-                    else rt = 255;
+                    else if (c.trigger == TRIGGER_RIGHT) rt = 255;
                 }
             }
             // Touch steering wins while held; releasing it resumes tilt steering.
@@ -572,6 +598,9 @@ public final class TouchControlsView extends View {
         if (hiddenByGamepad && !editing) {
             return;
         }
+        if (showFps && !editing) {
+            drawFpsCounter(canvas);
+        }
         if (editing) {
             canvas.drawColor(0x66000000);
         }
@@ -585,9 +614,9 @@ public final class TouchControlsView extends View {
                 float cx = c.x * getWidth(), cy = c.y * getHeight();
                 dashed.setStrokeWidth(3f);
                 dashed.setColor(c == selected ? 0xFFFFC107 : 0x88FFFFFF);
-                if (c.type == PEDAL) {
-                    float hw = pedalWidth(c) * .5f + 8f, hh = c.size * getHeight() * .5f + 8f;
-                    canvas.drawRect(cx - hw, cy - hh, cx + hw, cy + hh, dashed);
+                if (c.type == PILL) {
+                    float hw = pillWidth(c) * .5f + 8f, hh = pillHeight(c) * .5f + 8f;
+                    canvas.drawRoundRect(new RectF(cx - hw, cy - hh, cx + hw, cy + hh), hh, hh, dashed);
                 } else {
                     canvas.drawCircle(cx, cy, radius(c) + 8f, dashed);
                 }
@@ -600,6 +629,33 @@ public final class TouchControlsView extends View {
         }
     }
 
+    private void drawFpsCounter(Canvas canvas) {
+        long now = System.nanoTime();
+        frameCount++;
+        if (lastFpsTime == 0) {
+            lastFpsTime = now;
+        } else {
+            long elapsedNs = now - lastFpsTime;
+            if (elapsedNs >= 500_000_000L) {
+                currentFps = (frameCount * 1_000_000_000f) / elapsedNs;
+                currentMs = 1000f / Math.max(1f, currentFps);
+                frameCount = 0;
+                lastFpsTime = now;
+            }
+        }
+        String fpsText = String.format(java.util.Locale.US, "%.0f fps  %.1f ms", currentFps, currentMs);
+        text.setTextSize(getHeight() * 0.042f);
+        text.setColor(0xFFFFFFFF);
+        float textW = text.measureText(fpsText);
+        float padX = 18f, padY = 10f;
+        float left = 24f, top = 20f;
+        rect.set(left, top, left + textW + padX * 2f, top + text.getTextSize() + padY * 2f);
+        fill.setColor(0x88000000);
+        canvas.drawRoundRect(rect, 8f, 8f, fill);
+        canvas.drawText(fpsText, rect.centerX(), rect.centerY() + text.getTextSize() * 0.35f, text);
+        postInvalidateDelayed(100);
+    }
+
     private void drawControl(Canvas canvas, Control c, float alpha) {
         final float cx = c.x * getWidth(), cy = c.y * getHeight(), r = radius(c);
         final int a = Math.round(alpha * 255f);
@@ -610,67 +666,81 @@ public final class TouchControlsView extends View {
                 boolean tiltMode = c.id.equals("ls") && tiltSteering && !editing && !held;
                 fill.setColor(withAlpha(0xFF101820, a * 110 / 255));
                 canvas.drawCircle(bx, by, r, fill);
-                stroke.setStrokeWidth(Math.max(2f, r * .03f));
-                stroke.setColor(withAlpha(0xFFEAF2FA, a * 160 / 255));
+                stroke.setStrokeWidth(Math.max(2.5f, r * .04f));
+                stroke.setColor(withAlpha(0xFFFFFFFF, a * 180 / 255));
                 canvas.drawCircle(bx, by, r, stroke);
-                float knobR = r * .42f;
+                float knobR = r * .44f;
                 float kx = bx + (tiltMode ? clamp(tilt * tiltSensitivity, -1f, 1f) : c.knobX) * (r - knobR);
                 float ky = by + (tiltMode ? 0f : c.knobY) * (r - knobR);
-                fill.setColor(withAlpha(held ? 0xFFFF9A32 : 0xFF3A4654, a * 220 / 255));
+                fill.setColor(withAlpha(held ? 0xFFFF9A32 : 0xFF18232E, a * 200 / 255));
                 canvas.drawCircle(kx, ky, knobR, fill);
+                stroke.setColor(withAlpha(held ? 0xFFFFD18A : 0xFFFFFFFF, a * 220 / 255));
                 canvas.drawCircle(kx, ky, knobR, stroke);
-                label(canvas, tiltMode ? "TILT" : c.hint, bx, by + r + r * .22f, r * .16f, a);
+                label(canvas, tiltMode ? "TILT" : c.label, kx, ky + knobR * .35f, knobR * .72f, a);
                 break;
             }
             case DPAD: {
-                float arm = r * .36f;
+                float armW = r * .65f;
+                float halfArm = armW * .5f;
+                float cr = armW * .28f;
                 fill.setColor(withAlpha(0xFF101820, a * 110 / 255));
-                canvas.drawCircle(cx, cy, r, fill);
-                stroke.setStrokeWidth(Math.max(2f, r * .03f));
-                stroke.setColor(withAlpha(0xFFEAF2FA, a * 160 / 255));
-                canvas.drawCircle(cx, cy, r, stroke);
-                drawArrow(canvas, cx, cy - r * .6f, arm, 0, (c.dpad & DPAD_UP) != 0, a);
-                drawArrow(canvas, cx, cy + r * .6f, arm, 180, (c.dpad & DPAD_DOWN) != 0, a);
-                drawArrow(canvas, cx - r * .6f, cy, arm, 270, (c.dpad & DPAD_LEFT) != 0, a);
-                drawArrow(canvas, cx + r * .6f, cy, arm, 90, (c.dpad & DPAD_RIGHT) != 0, a);
+                stroke.setStrokeWidth(Math.max(2.5f, r * .04f));
+                stroke.setColor(withAlpha(0xFFFFFFFF, a * 190 / 255));
+
+                rect.set(cx - halfArm, cy - r, cx + halfArm, cy + r);
+                canvas.drawRoundRect(rect, cr, cr, fill);
+                canvas.drawRoundRect(rect, cr, cr, stroke);
+
+                rect.set(cx - r, cy - halfArm, cx + r, cy + halfArm);
+                canvas.drawRoundRect(rect, cr, cr, fill);
+                canvas.drawRoundRect(rect, cr, cr, stroke);
+
+                rect.set(cx - halfArm + 2f, cy - halfArm + 2f, cx + halfArm - 2f, cy + halfArm - 2f);
+                canvas.drawRect(rect, fill);
+
+                if ((c.dpad & DPAD_UP) != 0) {
+                    fill.setColor(withAlpha(0xFFFF9A32, a * 200 / 255));
+                    rect.set(cx - halfArm, cy - r, cx + halfArm, cy - halfArm);
+                    canvas.drawRoundRect(rect, cr, cr, fill);
+                }
+                if ((c.dpad & DPAD_DOWN) != 0) {
+                    fill.setColor(withAlpha(0xFFFF9A32, a * 200 / 255));
+                    rect.set(cx - halfArm, cy + halfArm, cx + halfArm, cy + r);
+                    canvas.drawRoundRect(rect, cr, cr, fill);
+                }
+                if ((c.dpad & DPAD_LEFT) != 0) {
+                    fill.setColor(withAlpha(0xFFFF9A32, a * 200 / 255));
+                    rect.set(cx - r, cy - halfArm, cx - halfArm, cy + halfArm);
+                    canvas.drawRoundRect(rect, cr, cr, fill);
+                }
+                if ((c.dpad & DPAD_RIGHT) != 0) {
+                    fill.setColor(withAlpha(0xFFFF9A32, a * 200 / 255));
+                    rect.set(cx + halfArm, cy - halfArm, cx + r, cy + halfArm);
+                    canvas.drawRoundRect(rect, cr, cr, fill);
+                }
                 break;
             }
-            case PEDAL: {
-                float hw = pedalWidth(c) * .5f, hh = c.size * getHeight() * .5f;
+            case PILL: {
+                float hw = pillWidth(c) * .5f, hh = pillHeight(c) * .5f;
                 rect.set(cx - hw, cy - hh, cx + hw, cy + hh);
-                float corner = hw * .35f;
-                fill.setColor(withAlpha(c.pressed ? 0xFFFF9A32 : c.color, a * 200 / 255));
+                float corner = hh;
+                fill.setColor(withAlpha(c.pressed ? 0xFFFF9A32 : 0xFF101820, a * (c.pressed ? 220 : 130) / 255));
                 canvas.drawRoundRect(rect, corner, corner, fill);
-                stroke.setStrokeWidth(Math.max(2f, hw * .05f));
-                stroke.setColor(withAlpha(c.pressed ? 0xFFFFD18A : 0xFFEAF2FA, a * 190 / 255));
+                stroke.setStrokeWidth(Math.max(2.5f, hh * .08f));
+                stroke.setColor(withAlpha(c.pressed ? 0xFFFFD18A : 0xFFFFFFFF, a * 220 / 255));
                 canvas.drawRoundRect(rect, corner, corner, stroke);
-                // Grip lines, like a pedal.
-                stroke.setStrokeWidth(Math.max(2f, hw * .04f));
-                for (int i = -2; i <= 2; i++) {
-                    float ly = cy + i * hh * .16f + hh * .25f;
-                    canvas.drawLine(cx - hw * .55f, ly, cx + hw * .55f, ly, stroke);
-                }
-                label(canvas, c.label, cx, cy - hh * .45f, hw * .36f, a);
-                label(canvas, c.hint, cx, cy - hh * .45f + hw * .42f, hw * .22f, a);
+                label(canvas, c.label, cx, cy + hh * .35f, hh * .60f, a);
                 break;
             }
             default: {
                 fill.setColor(withAlpha(0xFF000000, a * 80 / 255));
                 canvas.drawCircle(cx, cy + r * .06f, r * 1.02f, fill);
-                fill.setColor(withAlpha(c.pressed ? 0xFFFF9A32 : 0xFF18232E, a * 190 / 255));
+                fill.setColor(withAlpha(c.pressed ? 0xFFFF9A32 : 0xFF18232E, a * (c.pressed ? 220 : 130) / 255));
                 canvas.drawCircle(cx, cy, r, fill);
                 stroke.setStrokeWidth(Math.max(2.5f, r * .08f));
-                stroke.setColor(withAlpha(c.pressed ? 0xFFFFD18A : c.color == 0xFF2A3440 ? 0xFFEAF2FA : c.color,
-                        a * 230 / 255));
+                stroke.setColor(withAlpha(c.pressed ? 0xFFFFD18A : 0xFFFFFFFF, a * 220 / 255));
                 canvas.drawCircle(cx, cy, r - stroke.getStrokeWidth() * .5f, stroke);
-                boolean shortLabel = c.label.length() <= 2;
-                float main = shortLabel ? r * (c.label.length() == 1 ? .85f : .6f) : r * .42f;
-                if (c.hint.isEmpty()) {
-                    label(canvas, c.label, cx, cy + main * .36f, main, a);
-                } else {
-                    label(canvas, c.label, cx, cy + main * .12f, main, a);
-                    label(canvas, c.hint, cx, cy + r * .62f, r * .26f, a);
-                }
+                label(canvas, c.label, cx, cy + r * .35f, r * .75f, a);
                 break;
             }
         }
