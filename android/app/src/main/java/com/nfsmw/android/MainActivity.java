@@ -232,49 +232,46 @@ public final class MainActivity extends Activity {
     // ---- Shader library ------------------------------------------------------------------------------------
 
     private void play() {
-        if (GpuDrivers.selected(this) != null) {
-            probeDriver(true);
-            return;
-        }
         playChecked();
     }
 
     private void playChecked() {
-        launchGame.setEnabled(false);
-        Diagnostics.recordLaunch(this);
-        importer.execute(() -> {
-            String problem = "nativo".equals(GameOptions.get(this, GameOptions.RENDERER))
-                    ? Diagnostics.incompatibility(this) : null;
-            mainHandler.post(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                launchGame.setEnabled(true);
-                continuePlay(problem);
-            });
-        });
-    }
-
-    private void continuePlay(String problem) {
-        if (problem == null) {
-            playCompatibleGame();
+        File gameRoot = sharedGameRoot();
+        if (!isValidGameFolder(gameRoot)) {
+            reportError("Please select the game folder containing default.xex, NFS, and Movies.");
             return;
         }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Select Alternative Renderer")
-                .setMessage(problem + "\n\nYou can test experimental compatibility mode. It may have graphical anomalies or lower performance.")
-                .setPositiveButton("Try Compatibility", (dialog, which) -> {
-                    GameOptions.set(this, GameOptions.RENDERER, "xenos");
-                    refreshOptions();
-                    playCompatibleGame();
-                })
-                .setNeutralButton("Send Report", (dialog, which) -> chooseReportDestination())
-                .setNegativeButton("Back", null).show();
+
+        File userDir = new File(getFilesDir(), "nfsmw/user");
+        GameOptions.writeToml(this, userDir);
+        File extDir = getExternalFilesDir(null);
+        if (extDir != null) GameOptions.writeToml(this, extDir);
+        savePathForNativeBackend(gameRoot.getAbsolutePath());
+
+        if ("nativo".equals(GameOptions.get(this, GameOptions.RENDERER))) {
+            if (!ShaderBuilder.ensureBundledShaders(this, gameRoot) && !ShaderBuilder.hasLibrary(gameRoot)) {
+                buildShaders(true);
+                return;
+            }
+        }
+        startActivity(new Intent(this, GameActivity.class));
     }
 
-    private void playCompatibleGame() {
-        if ("xenos".equals(GameOptions.get(this, GameOptions.RENDERER)) || ShaderBuilder.hasLibrary(sharedGameRoot())) {
-            startActivity(new Intent(this, GameActivity.class));
-        } else {
-            buildShaders(true);
+    private void savePathForNativeBackend(String path) {
+        try {
+            File f1 = new File(getFilesDir(), "selected_game_path.txt");
+            try (FileOutputStream out = new FileOutputStream(f1)) {
+                out.write(path.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            File ext = getExternalFilesDir(null);
+            if (ext != null) {
+                File f2 = new File(ext, "selected_game_path.txt");
+                try (FileOutputStream out = new FileOutputStream(f2)) {
+                    out.write(path.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+        } catch (IOException e) {
+            android.util.Log.e("NFSMW", "Failed to save selected_game_path.txt", e);
         }
     }
 
@@ -482,15 +479,20 @@ public final class MainActivity extends Activity {
     private static String optionSummary(String key) {
         switch (key) {
             case GameOptions.RENDERER: return "Native Vulkan pipeline vs Compatibility mode";
-            case "gpu_stability": return "Mali occlusions & sun flare stability";
+            case GameOptions.EDRAM: return "Host render target vs shader interlock";
             case GameOptions.RESOLUTION: return "Internal rendering resolution";
+            case GameOptions.RESOLUTION_SCALE: return "Resolution scaling multiplier";
             case GameOptions.FPS: return "Target framerate cap";
-            case "aa": return "Edge antialiasing filter";
-            case "shadows": return "Shadow calculation frequency";
-            case "car_reflections": return "Vehicle cubemap reflection detail";
-            case "road_reflection": return "Wet road surface reflections";
-            case "sky": return "Atmospheric sky shader glow";
-            case "filter": return "Post-processing color grade";
+            case GameOptions.AA: return "Edge antialiasing filter";
+            case GameOptions.ANISOTROPIC: return "Texture anisotropic filtering level";
+            case GameOptions.PIPELINE_THREADS: return "Worker threads for shader pipelines";
+            case GameOptions.TEXTURE_CACHE: return "Soft memory limit for texture cache";
+            case GameOptions.STABILITY: return "Bifrost occlusion and visual stability";
+            case GameOptions.SHADOWS: return "Shadow calculation frequency";
+            case GameOptions.CAR_REFLECTIONS: return "Vehicle cubemap reflection detail";
+            case GameOptions.ROAD_REFLECTION: return "Wet road surface reflections";
+            case GameOptions.SKY: return "Atmospheric sky shader glow";
+            case GameOptions.FILTER: return "Post-processing color grade";
             case "volume": return "Game audio master volume";
             case "audio_buffer": return "Audio queue buffer latency";
             case "language": return "In-game text and subtitles language";

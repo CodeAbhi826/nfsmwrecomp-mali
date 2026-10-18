@@ -13,6 +13,7 @@ game_root/
 *.bun
 *.viv
 *.nfsp
+!android/app/src/main/assets/nativo/*.nfsp
 
 # --- Generated from the game --------------------------------------------------
 generated/

@@ -28,8 +28,8 @@ import java.util.zip.ZipOutputStream;
 
 /** Own-app reports only. Generating a report never uploads or sends it. */
 final class Diagnostics {
-    static final String EMAIL = "daniebatuani@gmail.com";
-    static final String ISSUES = "https://github.com/codepdbh/nfsmw-android/issues/new";
+    static final String EMAIL = "";
+    static final String ISSUES = "https://github.com/CodeAbhi826/Malicomp/issues";
     private static final int LIMIT = 256 * 1024;
     private static JSONObject cachedGpu;
     private static native String nativeGpuReport(String hooks, String temp, String directory, String library);
@@ -53,7 +53,7 @@ final class Diagnostics {
         if (GpuDrivers.selected(context) == null) return gpu();
         JSONObject unknown = new JSONObject();
         try { unknown.put("requestedDriver", GpuDrivers.selected(context).name)
-                .put("probeError", "Driver seleccionado pendiente de probar"); } catch (Exception ignored) { }
+                .put("probeError", "Selected driver pending verification"); } catch (Exception ignored) { }
         return unknown;
     }
 
@@ -73,14 +73,8 @@ final class Diagnostics {
     }
 
     static String incompatibility(Context context) {
-        JSONObject result = gpu(context);
-        if (result.optBoolean("compatible", true)) return null;
-        StringBuilder message = new StringBuilder("The driver for ")
-                .append(result.optString("gpu", "this GPU"))
-                .append(" does not support required Vulkan features for the native renderer.");
-        message.append("\n\nDevice Vulkan: ").append(result.optString("vulkan", "Unavailable"));
-        message.append("\n\nLowering resolution does not resolve this incompatibility. You can share a diagnostic report to assist development.");
-        return message.toString();
+        // Transparent execution without blocking alerts
+        return null;
     }
 
     static String summary(Context context) {

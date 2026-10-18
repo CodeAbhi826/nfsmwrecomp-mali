@@ -6,9 +6,6 @@ android {
     namespace 'com.nfsmw.android'
     compileSdk 35
 
-    sourceSets {
-        main.java.srcDirs += ["$rootDir/../sdk/thirdparty/sdl3/android-project/app/src/main/java"]
-    }
 
     defaultConfig {
         applicationId 'io.github.nfsmwrecomp'
