@@ -3,6 +3,7 @@ package com.nfsmw.android;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.RectF;
@@ -53,7 +54,7 @@ public final class TouchControlsView extends View {
         final int mask;
         final int trigger;
         final int color;
-        final float defX, defY, defSize;
+        float defX, defY, defSize;
         final boolean defVisible;
         float x, y, size;
         boolean visible;
