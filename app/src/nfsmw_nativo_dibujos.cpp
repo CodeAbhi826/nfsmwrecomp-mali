@@ -2257,13 +2257,13 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     // 64-bit pointers (shaderInt64 and buffer device address) are optional: the shaders read every constant
     // from the set 4 UBOs, and with the current library they do not even contain the pointer path. Many Mali,
     // Adreno and PowerVR drivers have neither. Without them the push constants carry zeros.
-    const bool simular_11 = REXCVAR_GET(nfsmw_nativo_simular_vulkan11);
-    if (propiedades.shaderInt64 && propiedades.bufferDeviceAddress && !simular_11) {
+    const bool sin_punteros_64 = REXCVAR_GET(nfsmw_nativo_simular_vulkan11);
+    if (propiedades.shaderInt64 && propiedades.bufferDeviceAddress && !sin_punteros_64) {
       direccion_bufer_ = reinterpret_cast<FnDireccionBufer>(
           dispositivo_->vulkan_instance()->functions().vkGetDeviceProcAddr(device_, "vkGetBufferDeviceAddress"));
     }
     // A Vulkan 1.1 driver only takes SPIR-V up to 1.3: the library's 1.5 modules are converted when created.
-    spirv_13_ = propiedades.apiVersion < VK_MAKE_API_VERSION(0, 1, 2, 0) || simular_11;
+    spirv_13_ = propiedades.apiVersion < VK_MAKE_API_VERSION(0, 1, 2, 0) || sin_punteros_64;
     REXLOG_INFO("[nativo] C6: punteros de 64 bits {}; SPIR-V de la biblioteca {}",
                 direccion_bufer_ ? "disponibles" : "NO disponibles (constantes solo por UBO)",
                 spirv_13_ ? "convertido a 1.3 (Vulkan 1.1)" : "1.5 tal cual");
@@ -10026,7 +10026,7 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     }
     nfsmw::nativo::diario::Anotar(nfsmw::nativo::diario::kSubida, textura.direccion, uint64_t(offset),
                                   (uint64_t(textura.imagen.ancho) << 32) | textura.imagen.alto,
-                                  textura.niveles, static_cast<uint64_t>(textura.imagen.imagen));
+                                  textura.niveles, nfsmw::nativo::diario::NumeroDeMango(textura.imagen.imagen));
     dfn_.vkCmdCopyBufferToImage(subida, subida_, textura.imagen.imagen, VK_IMAGE_LAYOUT_GENERAL,
                                 textura.niveles, copias.data());
   }

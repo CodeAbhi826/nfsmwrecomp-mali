@@ -21,8 +21,21 @@
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <type_traits>
 
 namespace nfsmw::nativo::diario {
+
+// A Vulkan handle as a number, for the journal. Non-dispatchable handles are pointers with the 64-bit
+// pointer defines (Android, PC, NVK) and plain integers with others; this accepts both, unlike a bare
+// static_cast, which the Android build rejects. The value is only an identity for the log.
+template <typename T>
+inline uint64_t NumeroDeMango(T mango) {
+  if constexpr (std::is_pointer_v<T>) {
+    return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(mango));
+  } else {
+    return static_cast<uint64_t>(mango);
+  }
+}
 
 enum : uint32_t {
   kFotograma = 1,  // frame boundary: a = frame number
