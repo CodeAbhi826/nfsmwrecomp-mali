@@ -24,6 +24,7 @@ set(SDL_STATIC OFF CACHE BOOL "Use SDL's shared Android library" FORCE)
 
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../../../../app" "nfsmw-app")
 target_sources(nfsmw PRIVATE "${CMAKE_CURRENT_LIST_DIR}/android_touch.cpp"
+                             "${CMAKE_CURRENT_LIST_DIR}/android_fps.cpp"
                              "${CMAKE_CURRENT_LIST_DIR}/android_rendimiento.cpp")
 
 if(TARGET SDL3-shared)
