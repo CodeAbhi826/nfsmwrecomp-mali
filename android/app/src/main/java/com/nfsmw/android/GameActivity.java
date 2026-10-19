@@ -61,6 +61,23 @@ public final class GameActivity extends SDLActivity
     private InputManager inputManager;
     private SensorManager sensorManager;
     private Sensor gravity;
+    private TextView textoFps;
+    private final android.os.Handler fpsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable fpsUpdater = new Runnable() {
+        @Override
+        public void run() {
+            if (textoFps != null) {
+                float fps = io.github.nfsmwrecomp.GameActivity.tryGetFps();
+                float ms = io.github.nfsmwrecomp.GameActivity.tryGetMs();
+                if (fps > 0.0f) {
+                    textoFps.setText(String.format(java.util.Locale.US, "%.0f fps  %.1f ms", fps, ms));
+                } else {
+                    textoFps.setText("-- fps");
+                }
+                fpsHandler.postDelayed(this, 300);
+            }
+        }
+    };
 
     private static native void nativeSetStretch(boolean stretch);
 
@@ -104,6 +121,7 @@ public final class GameActivity extends SDLActivity
                 gravity = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
             }
         }
+        setupFpsOverlay(root);
     }
 
     // SDL picks an orientation from the window size when it creates its window; the game is landscape only.
@@ -150,6 +168,9 @@ public final class GameActivity extends SDLActivity
         }
         updateTiltListener();
         applyStretch(controls.stretch);
+        if (textoFps != null) {
+            fpsHandler.post(fpsUpdater);
+        }
     }
 
     private static void applyStretch(boolean stretch) {
@@ -162,6 +183,7 @@ public final class GameActivity extends SDLActivity
 
     @Override
     protected void onPause() {
+        fpsHandler.removeCallbacks(fpsUpdater);
         if (inputManager != null) {
             inputManager.unregisterInputDeviceListener(this);
         }
@@ -172,6 +194,29 @@ public final class GameActivity extends SDLActivity
             controls.setEditing(false);
         }
         super.onPause();
+    }
+
+    private void setupFpsOverlay(ViewGroup root) {
+        SharedPreferences prefs = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
+        boolean showFps = prefs.getBoolean("show_fps", true);
+        if (!showFps) return;
+
+        textoFps = new TextView(this);
+        textoFps.setTextColor(Color.WHITE);
+        textoFps.setBackgroundColor(0x80000000); // 50% translucent black
+        textoFps.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+        textoFps.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.0f);
+        int pad = dp(6);
+        textoFps.setPadding(pad, pad, pad, pad);
+        textoFps.setText("-- fps");
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.TOP | Gravity.START;
+        lp.setMargins(dp(16), dp(16), 0, 0);
+        root.addView(textoFps, lp);
+
+        fpsHandler.post(fpsUpdater);
     }
 
     @Override

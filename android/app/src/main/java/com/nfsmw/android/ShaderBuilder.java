@@ -78,7 +78,7 @@ final class ShaderBuilder {
     /** Whether the game folder already has a library of the current version. */
     static boolean hasLibrary(File gameRoot) {
         File f = new File(gameRoot, LIBRARY);
-        if (!f.isFile() || f.length() <= 24) {
+        if (!f.isFile() || f.length() < 2_800_000) {
             return false;
         }
         try (InputStream in = new FileInputStream(new File(gameRoot, VERSION_FILE))) {
@@ -88,35 +88,6 @@ final class ShaderBuilder {
         } catch (IOException e) {
             return false;
         }
-    }
-
-    /** Unpacks precompiled shaders from APK assets if not yet present in game root. */
-    static boolean ensureBundledShaders(android.content.Context context, File gameRoot) {
-        if (hasLibrary(gameRoot)) return true;
-        try {
-            InputStream in = context.getAssets().open("nativo/" + LIBRARY);
-            File target = new File(gameRoot, LIBRARY);
-            File tmp = new File(gameRoot, LIBRARY + ".tmp");
-            try (FileOutputStream out = new FileOutputStream(tmp)) {
-                byte[] buffer = new byte[65536];
-                int n;
-                while ((n = in.read(buffer)) > 0) {
-                    out.write(buffer, 0, n);
-                }
-                out.getFD().sync();
-            }
-            if (tmp.renameTo(target)) {
-                try (FileOutputStream outVer = new FileOutputStream(new File(gameRoot, VERSION_FILE))) {
-                    outVer.write(LIBRARY_VERSION.getBytes("UTF-8"));
-                    outVer.getFD().sync();
-                }
-                Log.i(TAG, "Successfully extracted bundled shaders to " + target.getAbsolutePath());
-                return true;
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Bundled shaders not found in assets or failed to unpack: " + e.getMessage());
-        }
-        return hasLibrary(gameRoot);
     }
 
     @SuppressLint("SetJavaScriptEnabled")

@@ -35,11 +35,6 @@ public final class TouchControlsView extends View {
     private static final int BUTTON = 0, STICK = 1, DPAD = 2, PILL = 3, MENU = 4;
     private static final int TRIGGER_NONE = 0, TRIGGER_LEFT = 1, TRIGGER_RIGHT = 2;
     private static final String PREFS = "nfsmw_controls";
-
-    private long lastFpsTime = 0;
-    private int frameCount = 0;
-    private float currentFps = 60.0f;
-    private float currentMs = 16.6f;
     boolean showFps = false;
 
     /** One control of the pad. */
@@ -687,9 +682,6 @@ public final class TouchControlsView extends View {
         if (hiddenByGamepad && !editing) {
             return;
         }
-        if (showFps && !editing) {
-            drawFpsCounter(canvas);
-        }
         if (editing) {
             canvas.drawColor(0x66000000);
         }
@@ -716,40 +708,6 @@ public final class TouchControlsView extends View {
                 }
             }
         }
-    }
-
-    private void drawFpsCounter(Canvas canvas) {
-        float nativeFps = io.github.nfsmwrecomp.GameActivity.tryGetFps();
-        float nativeMs = io.github.nfsmwrecomp.GameActivity.tryGetMs();
-        if (nativeFps > 0.0f) {
-            currentFps = nativeFps;
-            currentMs = nativeMs > 0.0f ? nativeMs : (1000f / Math.max(1f, currentFps));
-        } else {
-            long now = System.nanoTime();
-            frameCount++;
-            if (lastFpsTime == 0) {
-                lastFpsTime = now;
-            } else {
-                long elapsedNs = now - lastFpsTime;
-                if (elapsedNs >= 500_000_000L) {
-                    currentFps = (frameCount * 1_000_000_000f) / elapsedNs;
-                    currentMs = 1000f / Math.max(1f, currentFps);
-                    frameCount = 0;
-                    lastFpsTime = now;
-                }
-            }
-        }
-        String fpsText = String.format(java.util.Locale.US, "%.0f fps  %.1f ms", currentFps, currentMs);
-        text.setTextSize(getHeight() * 0.042f);
-        text.setColor(0xFFFFFFFF);
-        float textW = text.measureText(fpsText);
-        float padX = 18f, padY = 10f;
-        float left = 24f, top = 20f;
-        rect.set(left, top, left + textW + padX * 2f, top + text.getTextSize() + padY * 2f);
-        fill.setColor(0x88000000);
-        canvas.drawRoundRect(rect, 8f, 8f, fill);
-        canvas.drawText(fpsText, rect.centerX(), rect.centerY() + text.getTextSize() * 0.35f, text);
-        postInvalidateDelayed(250);
     }
 
     private void drawControl(Canvas canvas, Control c, float alpha) {

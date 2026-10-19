@@ -523,8 +523,8 @@ public final class MainActivity extends Activity {
         String curLang = GameOptions.get(this, "language");
         card.addView(langGroup.createItem("Automatic (phone language)", "-1".equals(curLang), () -> GameOptions.set(this, "language", "-1")));
         card.addView(langGroup.createItem("English", "0".equals(curLang), () -> GameOptions.set(this, "language", "0")));
-        card.addView(langGroup.createItem("Español", "4".equals(curLang), () -> GameOptions.set(this, "language", "4")));
-        card.addView(langGroup.createItem("Português", "2".equals(curLang), () -> GameOptions.set(this, "language", "2")));
+        card.addView(langGroup.createItem("Spanish", "4".equals(curLang), () -> GameOptions.set(this, "language", "4")));
+        card.addView(langGroup.createItem("Portuguese", "2".equals(curLang), () -> GameOptions.set(this, "language", "2")));
 
         return card;
     }
@@ -971,7 +971,7 @@ public final class MainActivity extends Activity {
 
         File gameRoot = sharedGameRoot();
         if ("nativo".equals(GameOptions.get(this, GameOptions.RENDERER))) {
-            if (!ShaderBuilder.ensureBundledShaders(this, gameRoot) && !ShaderBuilder.hasLibrary(gameRoot)) {
+            if (!ShaderBuilder.hasLibrary(gameRoot)) {
                 buildShaders(true);
                 return;
             }
