@@ -61,3 +61,9 @@ __pycache__/
 
 # The Android app's own assets (settings), not game data.
 !android/app/src/main/assets/
+
+# Local worklogs (strictly local only, never push to git)
+WORKLOG.md
+worklog.md
+*worklog*
+
