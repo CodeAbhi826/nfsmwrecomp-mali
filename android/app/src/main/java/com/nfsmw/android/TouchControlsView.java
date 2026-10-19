@@ -27,15 +27,20 @@ import java.util.List;
  * (rex_sdl_set_touch_gamepad_state) only when it changes, and the view redraws only then.
  */
 public final class TouchControlsView extends View {
-    // XInput button bits (X_INPUT_GAMEPAD_*).
-    static final int DPAD_UP = 0x0001, DPAD_DOWN = 0x0002, DPAD_LEFT = 0x0004, DPAD_RIGHT = 0x0008;
-    static final int START = 0x0010, BACK = 0x0020, LTHUMB = 0x0040, RTHUMB = 0x0080;
-    static final int LB = 0x0100, RB = 0x0200, A = 0x1000, B = 0x2000, X = 0x4000, Y = 0x8000;
+    // SDL gamepad-button bits (1 << SDL_GAMEPAD_BUTTON_*). TouchControllerBridge.setState() converts
+    // this mask to XInput bits itself, so sending XInput bits here scrambles the whole pad: START
+    // arrived as BACK, A as D-pad down, the D-pad as A/B/X/Y, and "Press START" could never be
+    // satisfied.
+    static final int A = 0x0001, B = 0x0002, X = 0x0004, Y = 0x0008;      // SOUTH, EAST, WEST, NORTH
+    static final int BACK = 0x0010, START = 0x0040;                       // GUIDE (0x20) unused
+    static final int LTHUMB = 0x0080, RTHUMB = 0x0100;
+    static final int LB = 0x0200, RB = 0x0400;
+    static final int DPAD_UP = 0x0800, DPAD_DOWN = 0x1000, DPAD_LEFT = 0x2000, DPAD_RIGHT = 0x4000;
 
     private static final int BUTTON = 0, STICK = 1, DPAD = 2, PILL = 3, MENU = 4;
     private static final int TRIGGER_NONE = 0, TRIGGER_LEFT = 1, TRIGGER_RIGHT = 2;
     private static final String PREFS = "nfsmw_controls";
-    boolean showFps = false;
+    boolean showFps = true;
 
     /** One control of the pad. */
     static final class Control {
@@ -209,7 +214,7 @@ public final class TouchControlsView extends View {
         tiltSensitivity = prefs.getFloat("tilt_sensitivity", tiltSensitivity);
         hideWithGamepad = prefs.getBoolean("hide_with_gamepad", hideWithGamepad);
         stretch = prefs.getBoolean("stretch", stretch);
-        showFps = prefs.getBoolean("show_fps", false);
+        showFps = prefs.getBoolean("show_fps", true);
         int layoutVer = prefs.getInt("layout_version", 0);
         if (layoutVer < 3) {
             resetLayout();

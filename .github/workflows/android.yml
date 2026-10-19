@@ -32,6 +32,10 @@ jobs:
           unzip -j build_output/base_apk/*.apk "lib/arm64-v8a/*" -d android/app/src/main/jniLibs/arm64-v8a/
           ls -la android/app/src/main/jniLibs/arm64-v8a/
 
+      - name: Patch Mali native-renderer gate (runtimeDescriptorArray check)
+        run: |
+          python3 tools/patch_mali_native_gate.py android/app/src/main/jniLibs/arm64-v8a --require
+
       - name: Build ARM64 Debug APK
         working-directory: android
         run: |
