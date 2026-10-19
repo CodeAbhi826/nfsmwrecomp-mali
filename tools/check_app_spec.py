@@ -93,13 +93,13 @@ def check_options_spec():
     return True, "Game options specification verified"
 
 def check_assets():
-    shaders_path = os.path.join(REPO_ROOT, "android/app/src/main/assets/nativo/nfsmw_shaders.nfsp")
+    shader_compiler = os.path.join(REPO_ROOT, "android/app/src/main/assets/shaders/build.js")
     driver_path = os.path.join(REPO_ROOT, "android/app/src/main/assets/drivers/malicompat-g71.zip")
-    if not os.path.isfile(shaders_path):
-        return False, f"Missing bundled precompiled shaders at {os.path.relpath(shaders_path, REPO_ROOT)}"
+    if not os.path.isfile(shader_compiler):
+        return False, f"Missing shader compiler at {os.path.relpath(shader_compiler, REPO_ROOT)}"
     if not os.path.isfile(driver_path):
         return False, f"Missing bundled MaliCompat driver at {os.path.relpath(driver_path, REPO_ROOT)}"
-    return True, "Bundled assets verified: native shaders and MaliCompat driver present"
+    return True, "Bundled assets verified: shader compiler and MaliCompat driver present"
 
 def main():
     print("=" * 60)
