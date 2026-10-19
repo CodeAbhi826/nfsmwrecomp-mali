@@ -263,6 +263,20 @@ public final class GameActivity extends SDLActivity
             args.add("--present_safe_area_x=100");
             args.add("--present_safe_area_y=100");
         }
+        // Diagnostic runs without rebuilding the APK:
+        //   adb shell am start -n io.github.nfsmwrecomp/com.nfsmw.android.GameActivity \
+        //       --es extra_args "--nfsmw_nativo_diag_borrado=true --nfsmw_video_diag=true"
+        // These are appended after the launcher arguments. A repeated flag keeps the first command-line
+        // value (both come from the same source), so this can switch on diagnostics the launcher does not
+        // pass, but cannot override an option the launcher already sends.
+        String extra = getIntent() == null ? null : getIntent().getStringExtra("extra_args");
+        if (extra != null) {
+            for (String arg : extra.trim().split("\\s+")) {
+                if (arg.startsWith("--")) {
+                    args.add(arg);
+                }
+            }
+        }
         return args.toArray(new String[0]);
     }
 

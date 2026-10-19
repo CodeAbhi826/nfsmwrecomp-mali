@@ -216,7 +216,13 @@ final class GameOptions {
             args.add("--nfsmw_pegamento_nativo=false");
         } else {
             args.add("--nfsmw_render_sin_mosaico=true");
-            args.add("--vulkan_native_shader_features=false");
+            // The native renderer only works when the VkDevice is created with the capabilities its shaders
+            // use. On Vulkan 1.1 drivers (Mali-G71, r26p0) those come from VK_EXT_descriptor_indexing
+            // (runtimeDescriptorArray, descriptorBindingPartiallyBound, ...UpdateAfterBind, ...UnusedWhilePending),
+            // and the runtime requests the extension and the features only when this flag is true. With false the
+            // device reported "no tiene runtimeDescriptorArray: no se dibuja" and the game stayed black:
+            // no draws at all, only clears, copies and the movies.
+            args.add("--vulkan_native_shader_features=true");
             args.add("--vulkan_require_geometry_shader=false");
             args.add("--vulkan_require_fill_mode_non_solid=false");
             args.add("--vulkan_sparse_shared_memory=false");
@@ -231,11 +237,13 @@ final class GameOptions {
         if (!targetFolder.exists()) targetFolder.mkdirs();
         File file = new File(targetFolder, "nfsmw.toml");
         StringBuilder sb = new StringBuilder();
-        sb.append("# NFSMW Recompiled - Android Configuration\n\n");
-        sb.append("[General]\n");
+        sb.append("# NFSMW Recompiled - Android Configuration\n");
+        // The runtime resolves every toml entry by its exact flag name, so every key has to be at the
+        // top level. Inside a [Section] the runtime reads them as "Section_key", which matches no flag:
+        // the whole file was silently ignored before this was fixed.
+        sb.append("\n");
         sb.append("log_level = \"info\"\n");
-        sb.append("audio_mute = false\n\n");
-        sb.append("[GPU]\n");
+        sb.append("audio_mute = false\n");
         String renderer = get(context, RENDERER);
         sb.append("gpu_plugin = \"").append("xenos".equals(renderer) ? "xenos" : "plume").append("\"\n");
         sb.append("render_target_path_vulkan = \"").append(get(context, EDRAM)).append("\"\n");
@@ -260,8 +268,7 @@ final class GameOptions {
         sb.append("texture_cache_memory_limit_soft = ").append(get(context, TEXTURE_CACHE)).append("\n");
         sb.append("anisotropic_override = ").append(get(context, ANISOTROPIC)).append("\n");
         sb.append("readback_resolve = \"fast\"\n");
-        sb.append("gpu_3d_to_2d_texture = true\n\n");
-        sb.append("[Game]\n");
+        sb.append("gpu_3d_to_2d_texture = true\n");
         sb.append("black_edition = true\n");
         sb.append("grant_user_privileges = true\n");
         try (FileOutputStream out = new FileOutputStream(file)) {
