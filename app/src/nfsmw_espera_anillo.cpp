@@ -32,6 +32,7 @@
 
 #include "nfsmw_esperas_tiron.h"
 #include "nfsmw_nativo_sistema.h"
+#include "nfsmw_nativo_diario.h"
 
 #include <rex/cvar.h>
 #include <rex/hook.h>
@@ -204,6 +205,28 @@ std::atomic<uint64_t> g_completas_ns{0};
 std::atomic<uint64_t> g_completas_largas{0};
 std::atomic<uint64_t> g_completas_ns_max{0};
 
+// The GPU going quiet: iterations of sub_825A5D18 in a row that expired the timeout without the read
+// pointer advancing, and the last journal dump (see nfsmw_nativo_diario.h). While the GPU is stuck this
+// reaches the limit in ~0.3 s and the journal is written with the operations that were in flight when the
+// job that faults was recorded, seconds before the device is declared lost.
+std::atomic<uint32_t> g_sin_avance{0};
+std::atomic<int64_t> g_ultimo_diario_ms{0};
+
+void DiarioSiProcede(const char* motivo, uint64_t detalle) {
+  const int64_t ahora =
+      std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+          .count();
+  int64_t previo = g_ultimo_diario_ms.load(std::memory_order_relaxed);
+  if (ahora - previo < 45000) {
+    return;
+  }
+  if (!g_ultimo_diario_ms.compare_exchange_strong(previo, ahora)) {
+    return;
+  }
+  nfsmw::nativo::diario::Anotar(nfsmw::nativo::diario::kEspera, detalle);
+  nfsmw::nativo::diario::Volcar(motivo, detalle);
+}
+
 void AnotarEsperaCompleta(uint32_t lr, uint64_t ns) {
   g_completas_n.fetch_add(1, std::memory_order_relaxed);
   g_completas_ns.fetch_add(ns, std::memory_order_relaxed);
@@ -213,6 +236,9 @@ void AnotarEsperaCompleta(uint32_t lr, uint64_t ns) {
     uint64_t previo = g_completas_ns_max.load(std::memory_order_relaxed);
     while (ns > previo && !g_completas_ns_max.compare_exchange_weak(previo, ns, std::memory_order_relaxed)) {
     }
+  }
+  if (ns > 400000000) {  // over 400 ms: the GPU has gone quiet, write the journal now
+    DiarioSiProcede("espera_completa", ns / 1000000);
   }
   // Slot per caller: the first one with that lr, or the first empty one. With 13 possible callers and 12
   // slots, in the worst case one is left without a slot and shows up as "otros" in the total.
@@ -279,6 +305,15 @@ REX_HOOK_RAW(sub_825A5D18) {
           if (nfsmw::nativo::EsperarProgresoAnillo(
                   visto, std::chrono::microseconds(REXCVAR_GET(nfsmw_espera_anillo_max_us)))) {
             g_avances.fetch_add(1, std::memory_order_relaxed);
+            g_sin_avance.store(0, std::memory_order_relaxed);
+          } else {
+            // Timeout expired without the read pointer moving. In a row: the GPU is stuck (the job that
+            // faults has already been submitted) and the journal is written at once, while the stall is
+            // still going on.
+            const uint32_t seguidas = g_sin_avance.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (seguidas == 160) {  // ~0.3 s at the default 2 ms cap
+              DiarioSiProcede("anillo_parado", seguidas);
+            }
           }
           const uint64_t ns_espera = uint64_t(
               std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - antes)
@@ -292,8 +327,11 @@ REX_HOOK_RAW(sub_825A5D18) {
             }
           }
           Informe();
-        } else if ((vueltas & 0xFFFF) == 0) {
-          Informe();
+        } else {
+          g_sin_avance.store(0, std::memory_order_relaxed);  // the pointer caught up: nothing stuck
+          if ((vueltas & 0xFFFF) == 0) {
+            Informe();
+          }
         }
       }
     }

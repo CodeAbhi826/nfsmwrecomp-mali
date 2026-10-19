@@ -31,6 +31,7 @@
 #include "nfsmw_nativo_sincronizacion.h"
 #include "nfsmw_gpu_compatibilidad.h"
 #include "nfsmw_reflejo_demanda.h"  // road reflection only when it is read
+#include "nfsmw_nativo_diario.h"  // journal of the last GPU operations (device-fault hunts)
 
 #include "nfsmw_ajustes_graficos.h"
 
@@ -1546,6 +1547,10 @@ class DestinosVulkan final : public DestinosNativos, public ContextoDestinos {
         reduccion.dstOffsets[1] = {int32_t(dx + cabe_ancho), int32_t(dy + cabe_alto), 1};
         blit_(comandos_trabajo_, destino_render->imagen, VK_IMAGE_LAYOUT_GENERAL,
               resuelta->imagen.imagen, VK_IMAGE_LAYOUT_GENERAL, 1, &reduccion, VK_FILTER_LINEAR);
+        nfsmw::nativo::diario::Anotar(
+            nfsmw::nativo::diario::kCopia, static_cast<uint64_t>(destino_render->imagen),
+            static_cast<uint64_t>(resuelta->imagen.imagen),
+            (uint64_t(pedido_ancho) << 32) | pedido_alto, (uint64_t(cabe_ancho) << 32) | cabe_alto);
         ++copias_;
         ++reducciones_;
         if (reducciones_ <= 4) {
@@ -1605,6 +1610,10 @@ class DestinosVulkan final : public DestinosNativos, public ContextoDestinos {
             conversion.dstOffsets[1] = {int32_t(dx + ancho), int32_t(dy + alto), 1};
             blit_(comandos_trabajo_, destino_render->imagen, VK_IMAGE_LAYOUT_GENERAL, resuelta->imagen.imagen,
                   VK_IMAGE_LAYOUT_GENERAL, 1, &conversion, VK_FILTER_NEAREST);
+            nfsmw::nativo::diario::Anotar(
+                nfsmw::nativo::diario::kCopia, static_cast<uint64_t>(destino_render->imagen),
+                static_cast<uint64_t>(resuelta->imagen.imagen),
+                (uint64_t(ancho) << 32) | alto, (uint64_t(ancho) << 32) | alto);
             ++copias_;
             AnotarCopia(ancho, alto);
             ResueltaEscrita(base_resuelta, uint64_t(ancho) * alto);
@@ -1617,6 +1626,10 @@ class DestinosVulkan final : public DestinosNativos, public ContextoDestinos {
                               (info_color & 0xFFF) | (pitch << 12))) {
           copiar_imagen_(comandos_trabajo_, destino_render->imagen, VK_IMAGE_LAYOUT_GENERAL,
                          resuelta->imagen.imagen, VK_IMAGE_LAYOUT_GENERAL, 1, &copia);
+          nfsmw::nativo::diario::Anotar(
+              nfsmw::nativo::diario::kCopia, static_cast<uint64_t>(destino_render->imagen),
+              static_cast<uint64_t>(resuelta->imagen.imagen),
+              (uint64_t(ancho) << 32) | alto, (uint64_t(ancho) << 32) | alto);
           ++copias_;
           AnotarCopia(ancho, alto);
           ResueltaEscrita(base_resuelta, uint64_t(ancho) * alto);
@@ -5571,6 +5584,11 @@ class DestinosVulkan final : public DestinosNativos, public ContextoDestinos {
     copia.imageExtent = {ancho, alto, 1};
     dfn_.vkCmdCopyImageToBuffer(comandos_trabajo_, resuelta.imagen.imagen, VK_IMAGE_LAYOUT_GENERAL,
                                 lectura.bufer, 1, &copia);
+    nfsmw::nativo::diario::Anotar(nfsmw::nativo::diario::kResuelta,
+                                  static_cast<uint64_t>(resuelta.imagen.imagen),
+                                  static_cast<uint64_t>(lectura.bufer),
+                                  (uint64_t(ancho) << 32) | alto,
+                                  (uint64_t(uint32_t(dx)) << 32) | uint32_t(dy), 0);
     lecturas_pendientes_.push_back({&lectura, reg.rb_copy_dest_base, x0, y0, ancho, alto,
                                     reg.rb_copy_dest_pitch & 0x3FFF,
                                     (reg.rb_copy_dest_pitch >> 16) & 0x3FFF, reg.rb_copy_dest_info});

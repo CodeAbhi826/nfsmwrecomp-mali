@@ -54,6 +54,7 @@ static const uint32_t kSpirvResplandorSuave[1] = {0};
 #include "nfsmw_nativo_ganchos.h"  // nfsmw_d3d_vegetacion_juego
 #include "nfsmw_reflejo_demanda.h"  // nfsmw_reflejo_visibilidad
 #include "nfsmw_shader_library.h"
+#include "nfsmw_nativo_diario.h"  // journal of the last GPU operations (device-fault hunts)
 
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
@@ -3987,6 +3988,14 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     } else {
       NFSMW_SUB(10, dfn_.vkCmdDraw(cmd, cuenta, 1, base_cero ? primer_vertice : 0, 0));  // firstVertex
     }
+    nfsmw::nativo::diario::Anotar(
+        nfsmw::nativo::diario::kDibujo,
+        con_indices ? uint64_t(indices_de_16 ? indices16_.size() : indices_.size()) : uint64_t(cuenta),
+        uint64_t(vmin),
+        con_indices ? uint64_t(offset_indices / (indices_de_16 ? 2 : 4))
+                    : uint64_t(base_cero ? primer_vertice : 0),
+        entrada->enlaces.empty() ? 0 : origenes[0].direccion,
+        entrada->enlaces.empty() ? 0 : origenes[0].bytes);
     if (consulta_visibilidad != UINT32_MAX) {
       contexto_->TerminarConsultaVisibilidad(consulta_visibilidad);
     }
@@ -4073,6 +4082,9 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     } else {
       dfn_.vkCmdDraw(cmd, c.cuenta, 1, 0, 0);
     }
+    nfsmw::nativo::diario::Anotar(nfsmw::nativo::diario::kDibujo,
+                                  uint64_t(c.con_indices ? c.indices : c.cuenta), uint64_t(c.vmin),
+                                  uint64_t(c.con_indices ? c.primer_indice : 0), 0, 0);
     if (consulta != UINT32_MAX) {
       contexto_->TerminarEstadisticasDibujo(consulta);
     }
@@ -5019,6 +5031,7 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     }
     ++epoca_subida_;
     ++fotograma_;
+    nfsmw::nativo::diario::Anotar(nfsmw::nativo::diario::kFotograma, fotograma_);
     CerrarFotogramaDeLaGuardiaDelCielo();
     // nfsmw_reflejo_visibilidad, once per submission (the guard may switch it off mid-session).
     medir_visibilidad_ = contexto_->OclusionGpuPermitida() && nfsmw::reflejo_demanda::MedirVisibilidad();
@@ -10011,6 +10024,9 @@ class DibujosVulkanImpl final : public DibujosVulkan {
       copia.imageExtent = {std::max(textura.imagen.ancho >> n, 1u), std::max(textura.imagen.alto >> n, 1u),
                            textura.fondo ? textura.fondo : 1};
     }
+    nfsmw::nativo::diario::Anotar(nfsmw::nativo::diario::kSubida, textura.direccion, uint64_t(offset),
+                                  (uint64_t(textura.imagen.ancho) << 32) | textura.imagen.alto,
+                                  textura.niveles, static_cast<uint64_t>(textura.imagen.imagen));
     dfn_.vkCmdCopyBufferToImage(subida, subida_, textura.imagen.imagen, VK_IMAGE_LAYOUT_GENERAL,
                                 textura.niveles, copias.data());
   }
