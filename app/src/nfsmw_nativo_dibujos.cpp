@@ -1131,7 +1131,16 @@ constexpr uint32_t kRegFetch = 0x4800;
 constexpr uint32_t kRegBooleanos = 0x4900;
 constexpr uint32_t kRegistrosConstantes = 0x400;  // 256 constantes x 4
 
-constexpr uint32_t kCapacidadMonton[4] = {4096, 16, 64, 512};  // 2D, 3D, cubo, samplers
+// The malicompat shim rewrites the SPIR-V to this device's real ceilings and clamps the descriptor
+// arrays to them: maxPerStageDescriptorSampledImages is 256 and maxPerStageDescriptorSamplers is 128
+// on Mali-G71 (r26p0), so array and pool are clamped to those counts and the SPIR-V index is masked
+// with 255/127. The engine used to ask for 4096 images and 512 samplers: the array was clamped to 256
+// but the allocator still handed out slots up to 4095, so every bind past 255 was either dropped by
+// the shim (wrong texture) or indexed past the clamped array (device lost, the crash we see). Asking
+// for the clamped counts makes the allocator reach "full" at the same point the device does, and
+// ReservarRanura already answers 0 (the dummy at slot 0) when the heap is full, so exhaustion degrades
+// to the empty texture instead of to a dropped bind or a fault.
+constexpr uint32_t kCapacidadMonton[4] = {256, 16, 64, 128};  // 2D, 3D, cubo, samplers
 // Work slots. The ones actually used are chosen by nfsmw_nativo_ranuras_trabajo; this is the room reserved
 // for them, and it has to match the array in nfsmw_nativo_destinos.cpp.
 constexpr size_t kRanurasDeTrabajo = 3;
@@ -5385,9 +5394,21 @@ class DibujosVulkanImpl final : public DibujosVulkan {
   static constexpr uint32_t kSoltarPorFotograma = 4;
 
   void ExpulsarTexturasSiHaceFalta() {
+    // The 2D descriptor heap is a hard ceiling of its own: it is the clamped descriptor array, so once
+    // every slot has been handed out a new texture lands on the dummy at slot 0 and dropping one frees
+    // nothing usable until a slot comes back. Recycle the cold ones' slots before that happens
+    // (same 120-frame margin as the memory path, because the image is destroyed at once), whatever the
+    // free VRAM. Slots are only recycled by SoltarImagenes, so without this the heap would stay stuck on
+    // the empty texture once it filled up.
+    {
+      const Monton& m2d = montones_[0];
+      if (m2d.libres.empty() && m2d.siguiente >= m2d.capacidad) {
+        SoltarUnasPocasFrias();
+      }
+    }
     const uint64_t limite = uint64_t(std::max(texturas_mb_max_, 0)) << 20;
     if (!limite) {
-      return;
+      return;  // without a memory budget the heap pressure above is all the eviction there is
     }
     // Little by little, from 75 % of the limit. That is what avoids the stutter.
     if (bytes_texturas_ > limite / 4 * 3) {
@@ -8239,6 +8260,9 @@ class DibujosVulkanImpl final : public DibujosVulkan {
         return false;
       }
     }
+    REXLOG_INFO("[nativo] C6: montones de descriptores: {} imagenes 2D, {} 3D, {} cubos, {} samplers "
+                "(los topes reales del dispositivo: la shim recorta a 256 y 128)",
+                kCapacidadMonton[0], kCapacidadMonton[1], kCapacidadMonton[2], kCapacidadMonton[3]);
     const VkDescriptorPoolSize tamanos[2] = {
         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
          kCapacidadMonton[0] + kCapacidadMonton[1] + kCapacidadMonton[2]},
@@ -8474,6 +8498,13 @@ class DibujosVulkanImpl final : public DibujosVulkan {
   }
 
   void EscribirImagen(uint32_t monton, uint32_t ranura, VkImageView vista) {
+    // The heap is the clamped descriptor array: a write past its end is either dropped or walks off
+    // the array. ReservarRanura never returns one, but the dummy at slot 0 and the in-flight views
+    // come in as constants, so check.
+    if (ranura >= kCapacidadMonton[monton]) {
+      Avisar(60, "escritura de imagen fuera del monton: se descarta");
+      return;
+    }
     VkDescriptorImageInfo imagen{};
     imagen.imageView = vista;
     imagen.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -8490,6 +8521,10 @@ class DibujosVulkanImpl final : public DibujosVulkan {
   }
 
   void EscribirSampler(uint32_t ranura, VkSampler sampler) {
+    if (ranura >= kCapacidadMonton[3]) {
+      Avisar(61, "escritura de sampler fuera del monton: se descarta");
+      return;
+    }
     VkDescriptorImageInfo imagen{};
     imagen.sampler = sampler;
     VkWriteDescriptorSet escritura{};
