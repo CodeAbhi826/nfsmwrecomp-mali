@@ -216,17 +216,12 @@ final class GameOptions {
             args.add("--nfsmw_pegamento_nativo=false");
         } else {
             args.add("--nfsmw_render_sin_mosaico=true");
-            args.add("--nfsmw_nativo_mosaico_rapido=true");
-            args.add("--nfsmw_nativo_resolver_sin_copia=true");
-            args.add("--nfsmw_nativo_frontal_perezoso=true");
-            args.add("--nfsmw_nativo_saltar_invisibles=true");
-            args.add("--nfsmw_nativo_saltar_borrados_repetidos=true");
-            args.add("--nfsmw_nativo_z_temprana=true");
-            args.add("--nfsmw_nativo_zcull=true");
-            args.add("--nfsmw_nativo_simular_vulkan11=true");
-            args.add("--nfsmw_nativo_constantes_ubo=true");
-            args.add("--nfsmw_nativo_cuatro_conjuntos=true");
-            args.add("--nfsmw_nativo_texturas_bc_cpu=true");
+            args.add("--vulkan_native_shader_features=false");
+            args.add("--vulkan_require_geometry_shader=false");
+            args.add("--vulkan_require_fill_mode_non_solid=false");
+            args.add("--vulkan_sparse_shared_memory=false");
+            args.add("--async_shader_compilation=false");
+            args.add("--grant_user_privileges=true");
         }
         GpuDrivers.arguments(context, args);
         return args;

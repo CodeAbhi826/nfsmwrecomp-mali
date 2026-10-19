@@ -14,6 +14,8 @@ import android.hardware.input.InputManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
@@ -30,6 +32,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -62,22 +65,8 @@ public final class GameActivity extends SDLActivity
     private SensorManager sensorManager;
     private Sensor gravity;
     private TextView textoFps;
-    private final android.os.Handler fpsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable fpsUpdater = new Runnable() {
-        @Override
-        public void run() {
-            if (textoFps != null) {
-                float fps = io.github.nfsmwrecomp.GameActivity.tryGetFps();
-                float ms = io.github.nfsmwrecomp.GameActivity.tryGetMs();
-                if (fps > 0.0f) {
-                    textoFps.setText(String.format(java.util.Locale.US, "%.0f fps  %.1f ms", fps, ms));
-                } else {
-                    textoFps.setText("-- fps");
-                }
-                fpsHandler.postDelayed(this, 300);
-            }
-        }
-    };
+    private final Handler reloj = new Handler(Looper.getMainLooper());
+    private Runnable actualizarFps;
 
     private static native void nativeSetStretch(boolean stretch);
 
@@ -121,7 +110,10 @@ public final class GameActivity extends SDLActivity
                 gravity = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
             }
         }
-        setupFpsOverlay(root);
+        SharedPreferences ctrlPrefs = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
+        if (ctrlPrefs.getBoolean("show_fps", true)) {
+            ponerContadorFps();
+        }
     }
 
     // SDL picks an orientation from the window size when it creates its window; the game is landscape only.
@@ -168,8 +160,9 @@ public final class GameActivity extends SDLActivity
         }
         updateTiltListener();
         applyStretch(controls.stretch);
-        if (textoFps != null) {
-            fpsHandler.post(fpsUpdater);
+        if (actualizarFps != null && reloj != null) {
+            reloj.removeCallbacks(actualizarFps);
+            reloj.post(actualizarFps);
         }
     }
 
@@ -183,7 +176,9 @@ public final class GameActivity extends SDLActivity
 
     @Override
     protected void onPause() {
-        fpsHandler.removeCallbacks(fpsUpdater);
+        if (reloj != null) {
+            reloj.removeCallbacksAndMessages(null);
+        }
         if (inputManager != null) {
             inputManager.unregisterInputDeviceListener(this);
         }
@@ -196,27 +191,63 @@ public final class GameActivity extends SDLActivity
         super.onPause();
     }
 
-    private void setupFpsOverlay(ViewGroup root) {
-        SharedPreferences prefs = getSharedPreferences("nfsmw_controls", MODE_PRIVATE);
-        boolean showFps = prefs.getBoolean("show_fps", true);
-        if (!showFps) return;
+    @Override
+    protected void onDestroy() {
+        if (actualizarFps != null && reloj != null) {
+            reloj.removeCallbacks(actualizarFps);
+        }
+        super.onDestroy();
+    }
+
+    private void ponerContadorFps() {
+        ViewGroup root = mLayout != null ? mLayout : (ViewGroup) findViewById(android.R.id.content);
+        if (root == null) return;
 
         textoFps = new TextView(this);
-        textoFps.setTextColor(Color.WHITE);
-        textoFps.setBackgroundColor(0x80000000); // 50% translucent black
+        textoFps.setTextColor(0xFFFFFFFF);
+        textoFps.setBackgroundColor(0x99000000);
         textoFps.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
-        textoFps.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12.0f);
-        int pad = dp(6);
-        textoFps.setPadding(pad, pad, pad, pad);
+        textoFps.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.0f);
+        int pad = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 6.0f, getResources().getDisplayMetrics());
+        textoFps.setPadding(pad, pad / 2, pad, pad / 2);
         textoFps.setText("-- fps");
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        lp.gravity = Gravity.TOP | Gravity.START;
-        lp.setMargins(dp(16), dp(16), 0, 0);
+        RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
+        lp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        lp.addRule(RelativeLayout.ALIGN_PARENT_START);
+        lp.setMargins(pad * 2, pad * 2, 0, 0);
         root.addView(textoFps, lp);
 
-        fpsHandler.post(fpsUpdater);
+        actualizarFps = new Runnable() {
+            private String ultimo = "";
+
+            @Override
+            public void run() {
+                float fps = -1.0f;
+                float ms = -1.0f;
+                try {
+                    fps = io.github.nfsmwrecomp.GameActivity.nativeFps();
+                    ms = io.github.nfsmwrecomp.GameActivity.nativeMsPorFotograma();
+                } catch (UnsatisfiedLinkError ignored) {
+                }
+                String str;
+                if (fps <= 0.0f) {
+                    str = "-- fps";
+                } else {
+                    str = String.format(java.util.Locale.ROOT, "%.0f fps  %.1f ms", fps, ms);
+                }
+                if (!str.equals(ultimo)) {
+                    if (textoFps != null) {
+                        textoFps.setText(str);
+                    }
+                    ultimo = str;
+                }
+                reloj.postDelayed(this, 500);
+            }
+        };
+        reloj.post(actualizarFps);
     }
 
     @Override

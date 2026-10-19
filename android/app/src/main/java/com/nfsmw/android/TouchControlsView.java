@@ -148,8 +148,8 @@ public final class TouchControlsView extends View {
     private void createControls() {
         final int grey = COLOR_FILL;
         // Triggers and Bumpers (Top): Pill shape
-        add(new Control("lt", PILL, "LT", "", 0, TRIGGER_LEFT, grey, .07f, .10f, 1.0f, true));
-        add(new Control("lb", PILL, "LB", "", LB, TRIGGER_NONE, grey, .20f, .10f, 1.0f, true));
+        add(new Control("lt", PILL, "LT", "", 0, TRIGGER_LEFT, grey, .07f, .18f, 1.0f, true));
+        add(new Control("lb", PILL, "LB", "", LB, TRIGGER_NONE, grey, .20f, .18f, 1.0f, true));
         add(new Control("rb", PILL, "RB", "", RB, TRIGGER_NONE, grey, .80f, .10f, 1.0f, true));
         add(new Control("rt", PILL, "RT", "", 0, TRIGGER_RIGHT, grey, .93f, .10f, 1.0f, true));
 
