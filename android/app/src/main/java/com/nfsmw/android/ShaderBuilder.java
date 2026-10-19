@@ -78,7 +78,7 @@ final class ShaderBuilder {
     /** Whether the game folder already has a library of the current version. */
     static boolean hasLibrary(File gameRoot) {
         File f = new File(gameRoot, LIBRARY);
-        if (!f.isFile() || f.length() < 2_800_000) {
+        if (!f.isFile() || f.length() < 1_400_000) {
             return false;
         }
         try (InputStream in = new FileInputStream(new File(gameRoot, VERSION_FILE))) {
