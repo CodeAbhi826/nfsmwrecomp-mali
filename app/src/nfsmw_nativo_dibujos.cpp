@@ -36,6 +36,8 @@
 #include "nfsmw_nativo_texturas_pool.h"
 #include "nfsmw_texturas_bc.h"
 #include "nfsmw_texturas_etc2.h"
+#include "nfsmw_texturas_medir.h"
+#include "nfsmw_texturas_captura.h"
 #include "nfsmw_nativo_sincronizacion.h"
 #include "nfsmw_spirv_vulkan11.h"
 #include "nfsmw_spirv_descriptores.h"
@@ -411,6 +413,41 @@ REXCVAR_DEFINE_BOOL(nfsmw_nativo_texturas_bc_cpu, false, "NFSMW",
 REXCVAR_DEFINE_BOOL(nfsmw_nativo_texturas_etc2, false, "NFSMW",
                     "Renderizador nativo: guarda las texturas BC1-3 como ETC2 (4x menos memoria y ancho de "
                     "banda en Mali), con una cache en disco que crece jugando")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+/*
+ * Ahead-of-time conversion (app/src/nfsmw_texturas_captura.h).
+ *
+ * With this on, every BC texture that the renderer untiles for the RGBA8 path is also written to a capture
+ * file, and the next start converts the whole file to ETC2 before the game is running (the conversion is
+ * logged in the C3 line). That moves the encode out of the texture path: a zone load never pays for it, and
+ * a session with nfsmw_nativo_texturas_etc2 finds the blocks already in the cache.
+ *
+ * The intended use is: one session with ETC2 off (this captures everything that is played), then normal
+ * sessions with ETC2 on. Textures seen for the first time in an ETC2 session are still encoded on the spot
+ * (one texture, once), and the next start is the one that converts whatever was captured afterwards.
+ *
+ * It only writes when the CPU is decoding BC anyway, so it costs a file copy and nothing else. The capture
+ * is game data: it stays in the app's private cache directory and is truncated as soon as it is converted.
+ */
+REXCVAR_DEFINE_BOOL(nfsmw_nativo_texturas_capturar, true, "NFSMW",
+                    "Renderizador nativo: guarda los bytes BC de las texturas para convertirlas a ETC2 en el "
+                    "siguiente arranque, fuera del juego (asi entrar a una zona no codifica nada)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+
+/*
+ * On-device measurement of the BC -> host-format transcode (app/src/nfsmw_texturas_medir.h).
+ *
+ * 0 = off. Any other value is the side of the square test image (128 to 2048, 512 if less than 128). It runs
+ * once at startup, before the game allocates anything, and logs milliseconds and MB/s of source RGBA for:
+ * BC1 and BC3 decode (what the renderer does today), the ETC2/etcpak encode, and the ASTC encode with
+ * astcenc at 4x4, 6x6 and 8x8 (the three block sizes that would make sense: 8, 2.67 and 2 bpp). It is a
+ * diagnostic: with it at 0 nothing of it is called and the only cost is the code size.
+ */
+REXCVAR_DEFINE_INT32(nfsmw_nativo_texturas_medir, 0, "NFSMW",
+                     "Mide una vez al arrancar lo que tardan las conversiones de textura en este movil "
+                     "(lado de la imagen de prueba; 0 = no medir)")
+    .range(0, 2048)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 REXCVAR_DEFINE_BOOL(nfsmw_nativo_mipmaps, true, "NFSMW",
@@ -1185,6 +1222,9 @@ constexpr const char* kFicheroPipelines = "nfsmw_nativo_pipelines.bin";
 // The ETC2 blocks of the BC textures that the CPU had to decode (nfsmw_nativo_texturas_etc2). It holds no
 // game data, only derived blocks, and it grows while playing. The format is in nfsmw_texturas_etc2.h.
 constexpr const char* kFicheroTexturasEtc2 = "nfsmw_nativo_texturas_etc2.bin";
+// BC textures as the renderer untiled them, waiting to be encoded to ETC2 at the next start
+// (nfsmw_nativo_texturas_capturar). It is game data, kept private and truncated once converted.
+constexpr const char* kFicheroCapturaTexturas = "nfsmw_nativo_texturas_captura.bin";
 constexpr uint32_t kMagiaFicheroPipelines = 0x4350464Eu;  // "NFPC" en little-endian
 constexpr uint32_t kVersionFicheroPipelines = 1;
 constexpr size_t kCabeceraFicheroPipelines = 2 * sizeof(uint32_t) + 2 * sizeof(uint64_t);
@@ -2345,6 +2385,7 @@ class DibujosVulkanImpl final : public DibujosVulkan {
         dispositivo_->vulkan_instance()->functions().vkGetDeviceProcAddr(device_, "vkCmdCopyImage"));
     CargarCachePipelines();
     CargarCacheTexturasEtc2();
+    MedirConversionesTexturas();
     CargarEstadoDinamico();  // dynamic state phases 1 and 2
     if (!CrearSubida() || !CrearDescriptores()) {
       return false;
@@ -5293,6 +5334,7 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     InformeEnlaces();  // texture bind thread, every 10 s
     InformeHuellas();  // texture hash thread, every 10 s
     InformeReutilizar();  // measurement only: new textures with a live one's content, every 10 s
+    InformeEtc2();  // ETC2 block cache: hits, misses and what each cost, every 10 s
     ExpulsarTexturasSiHaceFalta();
     pool_texturas_.PorFotograma(fotograma_);  // grows with headroom, never exactly on demand
     // Test nfsmw_nativo_constantes_ubo_alternar_s. Switched here because the new epoch forces all constants
@@ -5438,23 +5480,48 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     REXLOG_INFO("[nativo] C3 memoria de la GPU: {}{}; la cache de texturas lleva {} MB de {} MB", texto,
                 hay_presupuesto ? "" : " (sin VK_EXT_memory_budget: solo tamanos)", bytes_texturas_ >> 20,
                 texturas_mb_max_);
-    if (etc2_) {
-      // Where the ETC2 work is: on the first run every texture is a miss and the CPU encodes it; a later run
-      // finds them all in the block cache and only writes keys (or a handful of new textures).
-      if (etc2_aciertos_ != etc2_aciertos_informe_ || etc2_fallos_ != etc2_fallos_informe_) {
-        etc2_aciertos_informe_ = etc2_aciertos_;
-        etc2_fallos_informe_ = etc2_fallos_;
-        REXLOG_INFO("[nativo] C3: texturas ETC2: {} desde la cache del disco, {} codificadas en este arranque "
-                    "({} MB de bloques); el fichero lleva {} texturas y {} MB",
-                    etc2_aciertos_, etc2_fallos_, etc2_codificados_ >> 20, cache_etc2_.Entradas(),
-                    cache_etc2_.Tamano() >> 20);
-      }
-    }
     // Without this line there is no way to know whether the pool is working or fragmenting. A vegetation
     // counter once existed and was never printed.
     if (pool_texturas_.Activo()) {
       REXLOG_INFO("[nativo] C3 {}", pool_texturas_.Resumen());
     }
+  }
+
+  /*
+   * Every 10 s: what the ETC2 block cache is actually doing. On a first run every texture is a miss and the
+   * line shows the CPU encoding rate; on a later run almost everything is a hit and it shows the disk read
+   * rate, which is the run-to-run win. The file is the only thing that survives a restart, so this is the
+   * line to watch to know whether the cache is filling and being used.
+   */
+  void InformeEtc2() {
+    if (!etc2_) return;
+    const auto ahora = std::chrono::steady_clock::now();
+    if (ahora - informe_etc2_ < std::chrono::seconds(10)) return;
+    informe_etc2_ = ahora;
+    if (etc2_aciertos_ == etc2_aciertos_informe_ && etc2_fallos_ == etc2_fallos_informe_) return;
+    const auto velocidad = [](uint64_t bytes, uint64_t ns) {
+      return ns ? double(bytes) * 1e9 / double(ns) / 1048576.0 : 0.0;
+    };
+    REXLOG_INFO("[nativo] C3: ETC2 en 10 s: {} aciertos ({:.1f} MB, {:.1f} ms, {:.1f} MB/s) y {} codificadas "
+                "({:.1f} MB, {:.1f} ms, {:.1f} MB/s); desde el arranque {} / {}; el fichero lleva {} texturas "
+                "y {} MB",
+                etc2_aciertos_ - etc2_aciertos_informe_,
+                double(etc2_bytes_acierto_ - etc2_bytes_acierto_informe_) / 1048576.0,
+                double(etc2_ns_acierto_ - etc2_ns_acierto_informe_) / 1e6,
+                velocidad(etc2_bytes_acierto_ - etc2_bytes_acierto_informe_,
+                          etc2_ns_acierto_ - etc2_ns_acierto_informe_),
+                etc2_fallos_ - etc2_fallos_informe_,
+                double(etc2_bytes_fallo_ - etc2_bytes_fallo_informe_) / 1048576.0,
+                double(etc2_ns_fallo_ - etc2_ns_fallo_informe_) / 1e6,
+                velocidad(etc2_bytes_fallo_ - etc2_bytes_fallo_informe_,
+                          etc2_ns_fallo_ - etc2_ns_fallo_informe_),
+                etc2_aciertos_, etc2_fallos_, cache_etc2_.Entradas(), cache_etc2_.Tamano() >> 20);
+    etc2_aciertos_informe_ = etc2_aciertos_;
+    etc2_fallos_informe_ = etc2_fallos_;
+    etc2_ns_acierto_informe_ = etc2_ns_acierto_;
+    etc2_ns_fallo_informe_ = etc2_ns_fallo_;
+    etc2_bytes_acierto_informe_ = etc2_bytes_acierto_;
+    etc2_bytes_fallo_informe_ = etc2_bytes_fallo_;
   }
 
   /*
@@ -7941,32 +8008,117 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     CargarListaPipelines();  // the prewarm list
   }
 
-  // ETC2 block cache (see nfsmw_texturas_etc2.h). Same folder as the pipeline cache, and nothing from the
-  // game inside: only the blocks the CPU produced. Missing file, or a half written tail from a run that was
-  // killed: the header's loader heals it.
+  /*
+   * The block cache (nfsmw_nativo_texturas_etc2) and the ahead-of-time capture (nfsmw_nativo_texturas_capturar).
+   *
+   * Same folder as the pipeline cache. The cache holds nothing from the game, only the blocks the CPU
+   * produced; a missing file, or a half written tail from a run that was killed, is healed by the loader.
+   *
+   * The capture is opened whenever it is enabled, even with ETC2 off: that is exactly the session that fills
+   * it, because that is the one whose CPU is decoding BC anyway. With ETC2 on it is opened too, and whatever
+   * it holds is converted right here, before the game has created a single texture: that is the point of the
+   * capture, the encode never happens in the texture path.
+   */
   void CargarCacheTexturasEtc2() {
+    capturar_ = REXCVAR_GET(nfsmw_nativo_texturas_capturar);
+    const std::filesystem::path carpeta = rex::filesystem::GetExecutableFolder() / kCarpetaCache;
+    if (capturar_) {
+      std::error_code error;
+      std::filesystem::create_directories(carpeta, error);
+      const std::filesystem::path ruta_captura = carpeta / kFicheroCapturaTexturas;
+      if (captura_texturas_.Abrir(ruta_captura.string())) {
+        REXLOG_INFO("[nativo] C3: captura de texturas BC {} ({} texturas, {} MB) en {}",
+                    captura_texturas_.Entradas() ? "abierta" : "vacia", captura_texturas_.Entradas(),
+                    captura_texturas_.Tamano() >> 20, ruta_captura.string());
+      } else {
+        REXLOG_WARN("[nativo] C3: no se pudo abrir la captura de texturas BC en {}: no se captura nada",
+                    ruta_captura.string());
+        capturar_ = false;
+      }
+    }
     if (!etc2_) return;
-    const std::filesystem::path ruta =
-        rex::filesystem::GetExecutableFolder() / kCarpetaCache / kFicheroTexturasEtc2;
+    const std::filesystem::path ruta = carpeta / kFicheroTexturasEtc2;
     if (!cache_etc2_.Abrir(ruta.string())) {
       REXLOG_WARN("[nativo] C3: no se pudo abrir la cache de texturas ETC2 en {}: se codifica cada textura en "
                   "cada arranque",
                   ruta.string());
       return;
     }
+    ConvertirCapturaPendiente();
     REXLOG_INFO("[nativo] C3: cache de texturas ETC2 {} ({} texturas, {} MB) en {}",
                 cache_etc2_.Entradas() ? "cargada" : "vacia", cache_etc2_.Entradas(),
                 cache_etc2_.Tamano() >> 20, ruta.string());
   }
 
   /*
+   * Everything in the capture that is not already in the block cache is decoded and encoded now, before the
+   * game is running. This is the only place the encoder runs in bulk; the texture path only falls back to it
+   * for a texture that was never captured.
+   */
+  void ConvertirCapturaPendiente() {
+    if (!capturar_ || !captura_texturas_.Abierta() || captura_texturas_.Entradas() == 0) return;
+    REXLOG_INFO("[nativo] C3: conversion adelantada: {} texturas capturadas ({} MB) antes de arrancar el "
+                "juego; la cache lleva {} texturas",
+                captura_texturas_.Entradas(), captura_texturas_.Tamano() >> 20, cache_etc2_.Entradas());
+    const auto r = nfsmw::captura_texturas::ConvertirCaptura(
+        captura_texturas_.Ruta(), cache_etc2_,
+        [](uint64_t leidas, const nfsmw::captura_texturas::ResultadoConversion& parcial) {
+          REXLOG_INFO("[nativo] C3: conversion adelantada: {} leidas, {} convertidas, {} ya estaban", leidas,
+                      parcial.convertidas, parcial.saltadas);
+        });
+    const double mb = double(r.bytes) / 1048576.0;
+    REXLOG_INFO("[nativo] C3: conversion adelantada: {} convertidas ({} MB de BC), {} ya estaban, {} fallidas, "
+                "{:.1f} ms ({:.1f} MB/s)",
+                r.convertidas, mb, r.saltadas, r.fallidas, r.ms, r.ms > 0 ? mb / (r.ms / 1000.0) : 0.0);
+    if (r.fallidas == 0 && captura_texturas_.Reiniciar()) {
+      REXLOG_INFO("[nativo] C3: captura vaciada: todo lo que tenia esta ya en la cache de bloques");
+    }
+  }
+
+  /*
+   * One-shot, opt-in measurement of what each transcode costs on this phone (nfsmw_nativo_texturas_medir).
+   * It runs before the game has allocated anything and releases everything it takes, so it does not change
+   * what happens afterwards. The interesting comparison is the last line: what one texture of the measured
+   * size costs today (BC decode only, upload as RGBA8) against the ETC2 path (decode + encode) and the ASTC
+   * paths (decode + a much heavier encode).
+   */
+  void MedirConversionesTexturas() {
+    const int32_t ajuste = REXCVAR_GET(nfsmw_nativo_texturas_medir);
+    if (ajuste < 128) return;
+    const uint32_t lado = uint32_t(std::min<int32_t>(ajuste, 2048));
+    const uint32_t repeticiones = nfsmw::medir::RepeticionesPara(lado);
+    REXLOG_INFO("[nativo] C3: midiendo conversiones de textura en {}x{} ({} repeticiones por prueba)",
+                lado, lado, repeticiones);
+    const auto resultados = nfsmw::medir::Conversiones(lado, repeticiones);
+    for (const auto& r : resultados) {
+      REXLOG_INFO("[nativo] C3:   {:<34} {:8.2f} ms  {:8.2f} MB/s  {}", r.nombre, r.ms, r.mb_s, r.nota);
+    }
+    // Names come in a fixed order: BC1, BC3, ETC2, ASTC 4x4, 6x6, 8x8.
+    const auto ms_de = [&resultados](size_t i) { return i < resultados.size() ? resultados[i].ms : 0.0; };
+    const double bc3 = ms_de(1);
+    REXLOG_INFO("[nativo] C3: una textura de {}x{} cuesta: hoy {:.2f} ms (BC3 a RGBA8) | ETC2 {:.2f} ms | "
+                "ASTC 4x4 {:.2f} ms | ASTC 6x6 {:.2f} ms | ASTC 8x8 {:.2f} ms",
+                lado, lado, bc3, bc3 + ms_de(2), bc3 + ms_de(3), bc3 + ms_de(4), bc3 + ms_de(5));
+  }
+
+  // The block cache key: the untiled content of the texture plus the shape and the BC format that decide the
+  // payload layout. The host format is part of the seed because a payload encoded for one format can never be
+  // sampled as another. Both the texture path and the ahead-of-time converter use this one function.
+  static uint64_t ClaveEtc2(uint32_t ancho, uint32_t alto, uint32_t capas, uint32_t niveles, uint32_t indice_bc,
+                            uint64_t contenido) {
+    const uint64_t semilla[3] = {uint64_t(ancho) | (uint64_t(alto) << 32),
+                                 uint64_t(capas) | (uint64_t(niveles) << 32),
+                                 uint64_t(indice_bc) | (uint64_t(VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK) << 32)};
+    return XXH3_64bits_withSeed(semilla, sizeof(semilla), contenido);
+  }
+
+  /*
    * Upload bytes for a BC texture that will live as ETC2 instead of RGBA8.
    *
    * `datos` comes in holding the untiled and byte-swapped BC blocks and comes out holding the ETC2 blocks for
-   * the upload buffer (the same trick as the RGBA8 path: swaps so the caller's temporary is reused). The key is
-   * the content (huella) plus the shape and the BC format, because the payload layout depends on them; the
-   * block cache holds nothing from the game, only these derived blocks. On a hit neither the BC decode nor the
-   * encode runs, which is what makes a second run cheap.
+   * the upload buffer (the same trick as the RGBA8 path: swaps so the caller's temporary is reused). On a hit
+   * neither the BC decode nor the encode runs, which is what makes a later run cheap; with the capture
+   * (nfsmw_texturas_captura.h) a miss at the start of a session is the only case left that encodes.
    */
   bool PrepararEtc2(Textura& textura, nfsmw::bc::Formato formato_bc, uint32_t indice_bc, uint32_t capas,
                     uint64_t huella, std::vector<uint8_t>& datos) {
@@ -7980,15 +8132,14 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     }
     // A brand new texture arrives with huella 0 (that is what is stored for it), so the content is hashed here.
     const uint64_t contenido = huella ? huella : XXH3_64bits(datos.data(), datos.size());
-    const uint64_t semilla[3] = {uint64_t(ancho) | (uint64_t(alto) << 32),
-                                 uint64_t(capas) | (uint64_t(textura.niveles) << 32),
-                                 uint64_t(indice_bc) | (uint64_t(VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK) << 32)};
-    const uint64_t clave = XXH3_64bits_withSeed(semilla, sizeof(semilla), contenido);
+    const uint64_t clave = ClaveEtc2(ancho, alto, capas, textura.niveles, indice_bc, contenido);
     temporal_etc2_.assign(bytes_etc2, 0);
+    const auto inicio = std::chrono::steady_clock::now();
     const auto* entrada = cache_etc2_.Buscar(clave);
+    bool acierto = false;
     if (entrada && entrada->bytes == bytes_etc2 && entrada->formato == uint8_t(indice_bc) &&
         cache_etc2_.Leer(*entrada, temporal_etc2_)) {
-      ++etc2_aciertos_;
+      acierto = true;
     } else {
       // The BC decode does the same work the RGBA8 path did, and the encoder turns that into blocks.
       std::array<uint32_t, 16> desp_rgba{};
@@ -8003,9 +8154,20 @@ class DibujosVulkanImpl final : public DibujosVulkan {
                                         std::max(alto >> n, 1u), capas, false, rasguno_etc2_,
                                         temporal_etc2_.data() + desplazamientos_etc2_[n]);
       }
-      ++etc2_fallos_;
-      etc2_codificados_ += bytes_etc2;
       cache_etc2_.Guardar(clave, uint8_t(indice_bc), temporal_etc2_);
+    }
+    // Included in the miss time on purpose: writing the blocks to the cache is part of what a first
+    // encounter costs, and leaving it out would hide the disk behind a flattering number.
+    const uint64_t ns = uint64_t(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - inicio).count());
+    if (acierto) {
+      ++etc2_aciertos_;
+      etc2_ns_acierto_ += ns;
+      etc2_bytes_acierto_ += bytes_etc2;
+    } else {
+      ++etc2_fallos_;
+      etc2_ns_fallo_ += ns;
+      etc2_bytes_fallo_ += bytes_etc2;
     }
     textura.desplazamiento_nivel = desplazamientos_etc2_;
     datos.swap(temporal_etc2_);
@@ -9629,6 +9791,16 @@ class DibujosVulkanImpl final : public DibujosVulkan {
                      indice_bc, textura.imagen.ancho, textura.imagen.alto, capas, textura.niveles, datos.size());
         ranura = 0;
         return;
+      }
+      // Ahead of time (nfsmw_nativo_texturas_capturar): this is the untiled BC data the offline converter
+      // needs, so copy it now while it is here. No encoding: that happens at the next start, before the game
+      // is running.
+      if (capturar_ && captura_texturas_.Abierta()) {
+        const uint64_t contenido = huella ? huella : XXH3_64bits(datos.data(), datos.size());
+        captura_texturas_.Anadir(ClaveEtc2(textura.imagen.ancho, textura.imagen.alto, capas, textura.niveles,
+                                           indice_bc, contenido),
+                                 textura.imagen.ancho, textura.imagen.alto, capas, textura.niveles,
+                                 uint8_t(indice_bc), datos);
       }
       datos.swap(temporal_bc_);
     }
@@ -12625,6 +12797,10 @@ class DibujosVulkanImpl final : public DibujosVulkan {
   bool etc2_ = false;
   std::array<bool, 3> etc2_soportado_{};
   nfsmw::etc2::CacheTexturas cache_etc2_;
+  // Ahead-of-time capture (nfsmw_nativo_texturas_capturar): the untiled BC bytes of every texture the RGBA8
+  // path decodes, so the next start can encode them before the game runs.
+  bool capturar_ = false;
+  nfsmw::captura_texturas::CapturaTexturas captura_texturas_;
   // Scratch kept between textures so a large one does not ask the system for memory again.
   std::vector<uint8_t> temporal_etc2_;
   std::vector<uint32_t> rasguno_etc2_;
@@ -12632,9 +12808,21 @@ class DibujosVulkanImpl final : public DibujosVulkan {
   // Report only: block cache hits and misses, and how many megabytes the CPU has had to encode.
   uint64_t etc2_aciertos_ = 0;
   uint64_t etc2_fallos_ = 0;
-  uint64_t etc2_codificados_ = 0;
+  // Wall time spent inside PrepararEtc2, split by the two things it can do: read blocks back from disk
+  // (hit) or decode BC + encode ETC2 (miss). That is the number that decides whether the cache is doing
+  // its job on the second run.
+  uint64_t etc2_ns_acierto_ = 0;
+  uint64_t etc2_ns_fallo_ = 0;
+  uint64_t etc2_bytes_acierto_ = 0;
+  uint64_t etc2_bytes_fallo_ = 0;
+  // Previous report's totals, for the last 10 s line.
   uint64_t etc2_aciertos_informe_ = 0;
   uint64_t etc2_fallos_informe_ = 0;
+  uint64_t etc2_ns_acierto_informe_ = 0;
+  uint64_t etc2_ns_fallo_informe_ = 0;
+  uint64_t etc2_bytes_acierto_informe_ = 0;
+  uint64_t etc2_bytes_fallo_informe_ = 0;
+  std::chrono::steady_clock::time_point informe_etc2_{};
   const VulkanDevice::Functions& dfn_;
   VkDevice device_;
   rex::memory::Memory* memoria_;

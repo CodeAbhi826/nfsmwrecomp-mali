@@ -157,6 +157,52 @@ else()
     add_executable(nfsmw ${NFSMW_SOURCES})
 endif()
 
+# astcenc (Apache-2.0, src/thirdparty/astcenc): the ASTC encoder. It is here for the on-device transcode
+# measurement (cvar nfsmw_nativo_texturas_medir, see src/nfsmw_texturas_medir.h) and is the ready-made path
+# should ASTC 6x6 (2.67 bpp, 1.5x less VRAM than ETC2) ever justify its much heavier encode. It builds as its
+# own static library because it is the only code that needs a SIMD backend define, and those are per target.
+set(NFSMW_ASTCENC_SOURCES
+    src/thirdparty/astcenc/astcenc_averages_and_directions.cpp
+    src/thirdparty/astcenc/astcenc_block_sizes.cpp
+    src/thirdparty/astcenc/astcenc_color_quantize.cpp
+    src/thirdparty/astcenc/astcenc_color_unquantize.cpp
+    src/thirdparty/astcenc/astcenc_compress_symbolic.cpp
+    src/thirdparty/astcenc/astcenc_compute_variance.cpp
+    src/thirdparty/astcenc/astcenc_decompress_symbolic.cpp
+    src/thirdparty/astcenc/astcenc_diagnostic_trace.cpp
+    src/thirdparty/astcenc/astcenc_entry.cpp
+    src/thirdparty/astcenc/astcenc_find_best_partitioning.cpp
+    src/thirdparty/astcenc/astcenc_ideal_endpoints_and_weights.cpp
+    src/thirdparty/astcenc/astcenc_image.cpp
+    src/thirdparty/astcenc/astcenc_integer_sequence.cpp
+    src/thirdparty/astcenc/astcenc_mathlib.cpp
+    src/thirdparty/astcenc/astcenc_mathlib_softfloat.cpp
+    src/thirdparty/astcenc/astcenc_partition_tables.cpp
+    src/thirdparty/astcenc/astcenc_percentile_tables.cpp
+    src/thirdparty/astcenc/astcenc_pick_best_endpoint_format.cpp
+    src/thirdparty/astcenc/astcenc_quantization.cpp
+    src/thirdparty/astcenc/astcenc_symbolic_physical.cpp
+    src/thirdparty/astcenc/astcenc_weight_align.cpp
+    src/thirdparty/astcenc/astcenc_weight_quant_xfer_tables.cpp
+)
+add_library(nfsmw_astcenc STATIC ${NFSMW_ASTCENC_SOURCES})
+set_target_properties(nfsmw_astcenc PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(ANDROID)
+    # arm64-v8a (the only ABI built): NEON is baseline, so the NEON backend always applies.
+    target_compile_definitions(nfsmw_astcenc PRIVATE
+        ASTCENC_NEON=1 ASTCENC_SVE=0 ASTCENC_SSE=0 ASTCENC_AVX=0 ASTCENC_POPCNT=0 ASTCENC_F16C=0)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i.86")
+    # The PC harness uses the same SSE4.1 backend astcenc builds for x86.
+    target_compile_definitions(nfsmw_astcenc PRIVATE
+        ASTCENC_NEON=0 ASTCENC_SVE=0 ASTCENC_SSE=41 ASTCENC_AVX=0 ASTCENC_POPCNT=1 ASTCENC_F16C=0
+        ASTCENC_X86_GATHERS=0)
+    target_compile_options(nfsmw_astcenc PRIVATE -msse4.1)
+else()
+    target_compile_definitions(nfsmw_astcenc PRIVATE
+        ASTCENC_NEON=0 ASTCENC_SVE=0 ASTCENC_SSE=0 ASTCENC_AVX=0 ASTCENC_POPCNT=0 ASTCENC_F16C=0)
+endif()
+target_link_libraries(nfsmw PRIVATE nfsmw_astcenc)
+
 # GPU_PLUGINS leaves the graphics backend DLL next to the .exe
 # (rexgpu-xenosd.dll in Debug, rexgpu-xenos.dll in Release).
 #
