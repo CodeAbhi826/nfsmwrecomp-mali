@@ -7,13 +7,12 @@
 // Which cores are the performance ones is not "the fastest clock" on every SoC. The Exynos 7884B (Galaxy A20)
 // has 2x Cortex-A73 at 2.0 GHz and 6x Cortex-A53 at 1.6 GHz: 1.6/2.0 = 80 %, so a "at least 70 % of the
 // fastest" test lets all eight through and the affinity is never applied ("8 CPU cores without slow
-// cluster"). Three signals, in order of preference:
+// cluster"). Two sources are tried in order; if neither works, the mask is left alone:
 //
 //   1. /sys/devices/system/cpu/cpuN/cpu_capacity, the scheduler's own view of each core (A73 ~1024, A53 ~512
 //      or 768 on the same SoC). Present since Android 8 on essentially every big.LITTLE kernel.
 //   2. cpuinfo_max_freq, keeping the cores within 90 % of the fastest. 90 % separates every big.LITTLE
 //      combination in use (the closest common one is 1.8/2.0 = 90 %, which stays together) and rejects 80 %.
-//   3. Nothing: homogeneous SoC, or unreadable files, and the mask is left alone.
 //
 // The mask is applied to every thread that already exists (the SDL thread, the UI thread, the logger), and the
 // threads created later inherit it. That is the "everything on the big cluster" mode. On a SoC whose top

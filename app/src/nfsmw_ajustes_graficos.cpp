@@ -333,6 +333,8 @@ void OcultarAjustesSinEfecto() {
       "swap_post_effect",
       // Replaced by nfsmw_resolucion_interna and nfsmw_limite_fps.
       "video_mode_width", "video_mode_height", "resolution", "video_mode_refresh_rate",
+      // Filled in by the Android launcher from the panel's aspect ratio (Display > Widescreen).
+      "nfsmw_pantalla_alto",
   };
   // On PC, the emulated path settings are registered by the GPU plugin, which is not loaded with the
   // native renderer: they do not exist there. On the Switch they are built into the executable and do show
