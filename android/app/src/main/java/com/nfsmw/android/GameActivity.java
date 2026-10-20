@@ -18,6 +18,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Display;
@@ -262,6 +263,25 @@ public final class GameActivity extends SDLActivity
             args.add("--present_letterbox=false");
             args.add("--present_safe_area_x=100");
             args.add("--present_safe_area_y=100");
+        }
+        // Widescreen: the panel's real aspect, handed to the renderer as a height at 1280 px wide. The game's
+        // logical screen size, projection, HUD and render targets become that size, so the image fills the
+        // phone instead of a 16:9 frame being stretched wider. Only for panels wider than 16:9: on a 16:9 or
+        // squarer screen the computed height is 720 or more and there is nothing to gain.
+        if (getSharedPreferences("nfsmw_controls", MODE_PRIVATE).getBoolean("widescreen", true)) {
+            DisplayMetrics metrics = new DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
+            int screenW = Math.max(metrics.widthPixels, metrics.heightPixels);
+            int screenH = Math.min(metrics.widthPixels, metrics.heightPixels);
+            if (screenW > 0 && screenH > 0) {
+                int height = Math.round(1280.0f * screenH / screenW);
+                if ((height & 1) != 0) {
+                    height++;
+                }
+                if (height >= 360 && height < 720) {
+                    args.add("--nfsmw_pantalla_alto=" + height);
+                }
+            }
         }
         // Diagnostic runs without rebuilding the APK:
         //   adb shell am start -n io.github.nfsmwrecomp/com.nfsmw.android.GameActivity \

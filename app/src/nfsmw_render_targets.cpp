@@ -110,6 +110,21 @@ REXCVAR_DEFINE_BOOL(nfsmw_render_prueba_mantener_msaa, false, "NFSMW",
 // do not go up, so 1080p there costs a third of the FPS; that is a deliberate choice.
 REXCVAR_DECLARE(std::string, nfsmw_resolucion_interna);
 
+// Widescreen: the phone's real aspect ratio expressed as a height at 1280 px wide. The Android launcher works
+// it out from the panel before the game starts (592 for a 19.5:9 screen, for example) and passes it here.
+//
+// This is the same idea as the PC widescreen fixes: the vertical field of view stays and the horizontal one
+// grows with the aspect, so the wider screen shows more of the world instead of squeezing a 16:9 image into
+// it. It works through the game's own aspect-dependent code: the pair 0x82A2CF70/74 (logical screen size) is
+// what the projection, the HUD and the UI read. The render targets and the front buffer must be the same
+// size, which is why this goes through the same latch as 1080p. 0 = off (16:9, 1280x720).
+REXCVAR_DEFINE_INT32(nfsmw_pantalla_alto, 0, "Graficos",
+                     "Widescreen: visible height at 1280 px wide (0 = off). The Android launcher fills it in "
+                     "from the panel's aspect ratio; the game's logical screen, projection, HUD and render "
+                     "targets use it, so the image fills the screen without being squashed")
+    .range(0, 720)
+    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+
 #if REX_PLATFORM_SWITCH
 extern "C" void RexSwitchPerfResolution(unsigned ancho, unsigned alto);
 #endif
@@ -126,10 +141,29 @@ constexpr uint32_t kOffMsaa = 76;
 constexpr uint32_t kOffRects = 100;
 constexpr uint32_t kBytesPorModoRects = 64;  // 4 D3DRECT de 16 bytes
 constexpr uint32_t kModoSinAa = 2;
-constexpr uint32_t kModo1080p = 4;  // its set becomes the 1920x1088 one
-constexpr uint32_t kAncho1080p = 1920;
-constexpr uint32_t kAlto1080p = 1088;   // 1080 rounded up to a multiple of 32, like its own 720 -> 736
-constexpr uint32_t kVisible1080p = 1080;
+constexpr uint32_t kModo1080p = 4;  // its set becomes the imposed one
+
+// The size imposed on the game: 1920x1080 for the docked mode, or 1280 x nfsmw_pantalla_alto for the phone's
+// own aspect ratio. The render target height is rounded up to a multiple of 32, as the game itself does with
+// 720 -> 736 and 1080 -> 1088.
+struct OutputSize {
+  uint32_t width;      // visible width
+  uint32_t height;     // visible height
+  uint32_t rt_height;  // render target height (multiple of 32)
+};
+
+bool WideOutputConfigured() {
+  const int32_t height = REXCVAR_GET(nfsmw_pantalla_alto);
+  return height >= 360 && height < 720;
+}
+
+OutputSize ImposedOutput() {
+  if (WideOutputConfigured()) {
+    const uint32_t height = uint32_t(REXCVAR_GET(nfsmw_pantalla_alto));
+    return {1280, height, ((height + 31) / 32) * 32};
+  }
+  return {1920, 1080, 1088};
+}
 
 // The four video size globals that sub_82441990 hard-codes to 1280/720, next to the output mode variable
 // (0x82A2CF80). The game's front buffer size is taken from them (see below).
@@ -227,20 +261,21 @@ void IgualarModosAlModoSinAa(uint8_t* base, uint32_t obj) {
     std::memcpy(base + obj + kOffRects + kBytesPorModoRects * m, base + rect2, 16);
   }
 
-  // And mode 4 becomes the 1080p one, with its own set. That way the resolution changes live by choosing
+  // And mode 4 becomes the imposed one, with its own set. That way the resolution changes live by choosing
   // mode 2 or mode 4, without registering anything again.
   {
+    const OutputSize out = ImposedOutput();
     const uint32_t rect4 = obj + kOffRects + kBytesPorModoRects * kModo1080p;
     Escribir32(base, obj + kOffTiras + 4 * kModo1080p, 1);
-    Escribir32(base, obj + kOffAncho + 4 * kModo1080p, kAncho1080p);
-    Escribir32(base, obj + kOffAlto + 4 * kModo1080p, kAlto1080p);
+    Escribir32(base, obj + kOffAncho + 4 * kModo1080p, out.width);
+    Escribir32(base, obj + kOffAlto + 4 * kModo1080p, out.rt_height);
     Escribir32(base, obj + kOffMsaa + 4 * kModo1080p, 0);
     Escribir32(base, rect4 + 0, 0);
     Escribir32(base, rect4 + 4, 0);
-    Escribir32(base, rect4 + 8, kAncho1080p);
-    Escribir32(base, rect4 + 12, kVisible1080p);
-    REXLOG_INFO("[resolucion] modo {} preparado a {}x{} (area visible {}x{}): es el de sobremesa", kModo1080p,
-                kAncho1080p, kAlto1080p, kAncho1080p, kVisible1080p);
+    Escribir32(base, rect4 + 8, out.width);
+    Escribir32(base, rect4 + 12, out.height);
+    REXLOG_INFO("[resolucion] mode {} set to {}x{} (visible {}x{}): the imposed output", kModo1080p, out.width,
+                out.rt_height, out.width, out.height);
   }
 
   REXLOG_INFO("[render] modos 3-5 igualados al modo 2: 1 tira {}x{} sin MSAA "
@@ -307,7 +342,7 @@ uint32_t ModoQueToca() {
     // Only once: if Reverse-NX asks for the opposite, say so. The game's output is already created and
     // cannot change on the fly, so neither can the internal resolution: a restart is needed.
     static std::atomic<bool> avisado{false};
-    if (!avisado.load(std::memory_order_relaxed) &&
+    if (!avisado.load(std::memory_order_relaxed) && !WideOutputConfigured() &&
         REXCVAR_GET(nfsmw_resolucion_interna) == "automatico") {
       const bool sobremesa = EnSobremesa();
       if ((sobremesa ? kModo1080p : kModoSinAa) != quiero && !avisado.exchange(true)) {
@@ -320,6 +355,10 @@ uint32_t ModoQueToca() {
     return quiero;
   }
   const std::string r = REXCVAR_GET(nfsmw_resolucion_interna);
+  // The phone's own aspect wins over the fixed presets: it is the whole point of the widescreen mode.
+  if (WideOutputConfigured()) {
+    return kModo1080p;
+  }
   if (r == "1920x1080") {
     return kModo1080p;
   }
@@ -352,10 +391,13 @@ void ForzarModoSinAa(uint8_t* base) {
   }
   Escribir32(base, obj, quiero);
   if (g_modo_puesto.exchange(quiero, std::memory_order_relaxed) != quiero) {
-    REXLOG_INFO("[resolucion] {} ({}): modo {}", quiero == kModo1080p ? "1920x1080" : "1280x720",
-                EnSobremesa() ? "sobremesa" : "portatil", quiero);
+    const OutputSize out = ImposedOutput();
+    const uint32_t width = quiero == kModo1080p ? out.width : 1280;
+    const uint32_t height = quiero == kModo1080p ? out.height : 720;
+    REXLOG_INFO("[resolucion] {}x{} ({}): mode {}", width, height,
+                EnSobremesa() ? "dock" : "handheld", quiero);
 #if REX_PLATFORM_SWITCH
-    RexSwitchPerfResolution(quiero == kModo1080p ? kAncho1080p : 1280, quiero == kModo1080p ? kVisible1080p : 720);
+    RexSwitchPerfResolution(width, height);
 #endif
   }
 }
@@ -363,7 +405,7 @@ void ForzarModoSinAa(uint8_t* base) {
 }  // namespace
 
 // What the output table hook needs.
-bool QuiereSalida1080p() { return ModoQueToca() == kModo1080p; }
+bool WantsImposedOutput() { return ModoQueToca() == kModo1080p; }
 
 /*
  * Where the game's front buffer really comes from.
@@ -386,18 +428,22 @@ bool QuiereSalida1080p() { return ModoQueToca() == kModo1080p; }
  * One limitation: the front buffer is created once, so this is decided at startup and does not change
  * later. Docking or undocking still changes the scene's internal resolution, not the output resolution.
  */
-bool SalidaDelJuegoEs1080p() { return g_salida_latch.load(std::memory_order_acquire) > 0; }
+bool GameOutputIsImposed() { return g_salida_latch.load(std::memory_order_acquire) > 0; }
 
 void ImponerTamanoDeSalida(uint8_t* base, const char* donde) {
   int quiero = g_salida_latch.load(std::memory_order_acquire);
   if (quiero < 0) {
-    quiero = (ModoSinAaActivo() && QuiereSalida1080p()) ? 1 : 0;
+    quiero = (ModoSinAaActivo() && WantsImposedOutput()) ? 1 : 0;
     int esperado = -1;
     if (g_salida_latch.compare_exchange_strong(esperado, quiero, std::memory_order_acq_rel)) {
       // 0 does not mean "1280x720": nothing is touched and the game picks the size, which with 1024x576 is
       // not 720p.
-      REXLOG_INFO("[resolucion] salida del juego al arrancar: {} ({})",
-                  quiero ? "1920x1080, impuesta" : "la que elija el juego", donde);
+      if (quiero) {
+        const OutputSize out = ImposedOutput();
+        REXLOG_INFO("[resolucion] game output at startup: {}x{}, imposed ({})", out.width, out.height, donde);
+      } else {
+        REXLOG_INFO("[resolucion] game output at startup: the one the game picks ({})", donde);
+      }
     } else {
       quiero = esperado;
     }
@@ -405,14 +451,15 @@ void ImponerTamanoDeSalida(uint8_t* base, const char* donde) {
   if (quiero <= 0) {
     return;
   }
-  Escribir32(base, kGlobalAncho0, kAncho1080p);
-  Escribir32(base, kGlobalAlto0, kVisible1080p);
-  Escribir32(base, kGlobalAncho1, kAncho1080p);
-  Escribir32(base, kGlobalAlto1, kVisible1080p);
+  const OutputSize out = ImposedOutput();
+  Escribir32(base, kGlobalAncho0, out.width);
+  Escribir32(base, kGlobalAlto0, out.height);
+  Escribir32(base, kGlobalAncho1, out.width);
+  Escribir32(base, kGlobalAlto1, out.height);
   Escribir32(base, kGlobalModoSalida, kModoSalida1080p);
   static std::atomic<uint32_t> avisos{0};
   if (avisos.fetch_add(1, std::memory_order_relaxed) < 8) {
-    REXLOG_INFO("[resolucion] bufer frontal del juego: {}x{} ({})", kAncho1080p, kVisible1080p, donde);
+    REXLOG_INFO("[resolucion] game front buffer: {}x{} ({})", out.width, out.height, donde);
   }
 }
 
@@ -420,27 +467,29 @@ void ImponerTamanoDeSalida(uint8_t* base, const char* donde) {
 void EscribirTamanoVideo(uint8_t* base) {
   // The latch decides, not the current mode. The logical screen size and the front buffer size must always
   // agree: otherwise the game lays out a 1920x1080 HUD over a 1280x720 buffer.
-  if (!SalidaDelJuegoEs1080p()) {
+  if (!GameOutputIsImposed()) {
     return;
   }
-  Escribir32(base, kGlobalAncho0, kAncho1080p);
-  Escribir32(base, kGlobalAlto0, kVisible1080p);
-  Escribir32(base, kGlobalAncho1, kAncho1080p);
-  Escribir32(base, kGlobalAlto1, kVisible1080p);
+  const OutputSize out = ImposedOutput();
+  Escribir32(base, kGlobalAncho0, out.width);
+  Escribir32(base, kGlobalAlto0, out.height);
+  Escribir32(base, kGlobalAncho1, out.width);
+  Escribir32(base, kGlobalAlto1, out.height);
   Escribir32(base, kGlobalModoSalida, kModoSalida1080p);
   static std::atomic<uint32_t> avisos{0};
   if (avisos.fetch_add(1, std::memory_order_relaxed) < 4) {
-    REXLOG_INFO("[resolucion] tamano de video del juego: {}x{}, modo de salida {}", kAncho1080p, kVisible1080p,
+    REXLOG_INFO("[resolucion] game video size: {}x{}, output mode {}", out.width, out.height,
                 kModoSalida1080p);
   }
 }
 
-void EscribirSalida1080p(uint8_t* base, uint32_t direccion_ancho, uint32_t direccion_alto) {
-  Escribir32(base, direccion_ancho, kAncho1080p);
-  Escribir32(base, direccion_alto, kVisible1080p);
+void WriteImposedOutput(uint8_t* base, uint32_t direccion_ancho, uint32_t direccion_alto) {
+  const OutputSize out = ImposedOutput();
+  Escribir32(base, direccion_ancho, out.width);
+  Escribir32(base, direccion_alto, out.height);
   static std::atomic<uint32_t> avisos{0};
   if (avisos.fetch_add(1, std::memory_order_relaxed) < 4) {
-    REXLOG_INFO("[resolucion] salida del juego: {}x{}", kAncho1080p, kVisible1080p);
+    REXLOG_INFO("[resolucion] game output: {}x{}", out.width, out.height);
   }
 }
 
@@ -564,10 +613,10 @@ REX_HOOK_RAW(sub_82447F78) {
   const uint32_t salida_ancho = ctx.r4.u32;
   const uint32_t salida_alto = ctx.r5.u32;
   __imp__sub_82447F78(ctx, base);
-  if (!nfsmw::render_targets::QuiereSalida1080p() || !salida_ancho || !salida_alto) {
+  if (!nfsmw::render_targets::WantsImposedOutput() || !salida_ancho || !salida_alto) {
     return;
   }
-  nfsmw::render_targets::EscribirSalida1080p(base, salida_ancho, salida_alto);
+  nfsmw::render_targets::WriteImposedOutput(base, salida_ancho, salida_alto);
 }
 
 // Binding of a render target set. The game does it every frame, so it is where the resolution is checked

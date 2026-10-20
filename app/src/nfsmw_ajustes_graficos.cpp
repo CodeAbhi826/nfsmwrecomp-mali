@@ -19,6 +19,9 @@ constexpr char kResolucionInternaPredeterminada[] = "1024x576";
 constexpr char kResolucionInternaPredeterminada[] = "automatico";
 #endif
 
+// Defined in nfsmw_render_targets.cpp: the phone's aspect as a height at 1280 px wide (0 = off).
+REXCVAR_DECLARE(int32_t, nfsmw_pantalla_alto);
+
 REXCVAR_DEFINE_STRING(nfsmw_resolucion_interna, kResolucionInternaPredeterminada, "Graficos",
                       "Resolucion a la que dibuja el juego. automatico: 1920x1080 en sobremesa y 1280x720 en "
                       "portatil, cambiando en marcha al meter y sacar la consola de la base Y siguiendo tambien a "
@@ -272,8 +275,13 @@ void AplicarAjustesGraficos() {
   // 720p, which is what is presented. Setting the video mode to 1920x1080 so that the game's front buffer
   // would grow with it was tried and does not work: the front buffer is registered earlier and stays at
   // 1280x720.
-  const bool interno_1080p = resolucion == "1920x1080" || resolucion == "automatico";
-  const std::string modo_video = interno_1080p ? std::string("1280x720") : resolucion;
+  //
+  // The phone's own aspect (nfsmw_pantalla_alto) goes through the same render-target path and keeps the
+  // video mode at 720p for the same reason: it is the game's logical screen size, not XGetVideoMode, what
+  // its projection and HUD read.
+  const bool wide = REXCVAR_GET(nfsmw_pantalla_alto) >= 360 && REXCVAR_GET(nfsmw_pantalla_alto) < 720;
+  const bool interno_1080p = !wide && (resolucion == "1920x1080" || resolucion == "automatico");
+  const std::string modo_video = (interno_1080p || wide) ? std::string("1280x720") : resolucion;
   const size_t x = modo_video.find('x');
   if (x != std::string::npos) {
     Poner("video_mode_width", modo_video.substr(0, x));
