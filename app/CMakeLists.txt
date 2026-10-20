@@ -323,7 +323,7 @@ if(REXGLUE_PLATFORM_SWITCH)
     # the code (53 MB) and the A57 has 48 KB of instruction cache: -O2 gives smaller code. It comes after the
     # -O3 of CMAKE_CXX_FLAGS_RELEASE, so it takes precedence. With LTO, GCC records each function's level at
     # compile time.
-    option(NFSMW_RECOMP_O2 "Compilar el codigo traducido con -O2 en vez de -O3" ON)
+    option(NFSMW_RECOMP_O2 "Compilar el codigo traducido con -O2 en vez de -O3" OFF)
     if(NFSMW_RECOMP_O2 AND TARGET nfsmw_recomp)
         target_compile_options(nfsmw_recomp PRIVATE -O2)
     endif()
