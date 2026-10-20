@@ -166,11 +166,11 @@ REXCVAR_DEFINE_STRING(nfsmw_resplandor_cielo, "natural", "Graficos",
 
 // The game's color filter, applied live: its "visual treatment" (the yellow tint, the desaturation and the
 // vignette of the final composite). Some players find the tint too strong in some areas of the city.
-REXCVAR_DEFINE_STRING(nfsmw_tratamiento_visual, "original", "Graficos",
-                      "Filtro de color del juego (el tono amarillo, la desaturacion y la vineta). original (por "
-                      "defecto): como la Xbox 360. suave: a mitad de fuerza. apagado: sin filtro; el resplandor y los "
-                      "fundidos siguen igual. Sin coste")
-    .allowed({"original", "suave", "apagado"});
+REXCVAR_DEFINE_STRING(nfsmw_tratamiento_visual, "apagado", "Graficos",
+                      "Filtro de color del juego (el tono amarillo, la desaturacion y la vineta). apagado (por "
+                      "defecto): sin filtro; el resplandor y los fundidos siguen igual. suave: a mitad de fuerza. "
+                      "original: como la Xbox 360. Sin coste")
+    .allowed({"apagado", "suave", "original"});
 
 // Optional post-processing, applied live (visible when changed with the menu open). Option lists for the
 // gamepad. The presets use the values from GoldenEye-Recomp (ge_postfx.cpp, public domain).

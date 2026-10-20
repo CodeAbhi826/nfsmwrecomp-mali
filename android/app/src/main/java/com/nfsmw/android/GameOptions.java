@@ -72,6 +72,7 @@ final class GameOptions {
     static final String ROAD_REFLECTION = "road_reflection";
     static final String SKY = "sky";
     static final String FILTER = "filter";
+    static final String VISUAL_TREATMENT = "visual_treatment";
     static final String PRESENT_EFFECT = "present_effect";
 
     static final Option[] GRAPHICS = {
@@ -135,6 +136,10 @@ final class GameOptions {
                     new String[] {"apagado", "cine", "vivo", "calido", "frio", "sepia", "noir", "crt"},
                     new String[] {"No filter", "Cinema", "Vivid", "Warm", "Cool", "Sepia", "Noir", "CRT"},
                     new String[] {"None", "Cinema", "Vivid", "Warm", "Cool", "Sepia", "Noir", "CRT"}),
+            new Option(VISUAL_TREATMENT, "Game Colour Grade", "nfsmw_tratamiento_visual", "apagado",
+                    new String[] {"apagado", "suave", "original"},
+                    new String[] {"Off (no yellow tint)", "Soft", "Original (Xbox 360)"},
+                    new String[] {"Off", "Soft", "Original"}),
     };
 
     static final Option[] AUDIO_SYSTEM = {
@@ -267,6 +272,7 @@ final class GameOptions {
         sb.append("vulkan_pipeline_creation_threads = ").append(get(context, PIPELINE_THREADS)).append("\n");
         sb.append("texture_cache_memory_limit_soft = ").append(get(context, TEXTURE_CACHE)).append("\n");
         sb.append("anisotropic_override = ").append(get(context, ANISOTROPIC)).append("\n");
+        sb.append("nfsmw_tratamiento_visual = \"").append(get(context, VISUAL_TREATMENT)).append("\"\n");
         sb.append("readback_resolve = \"fast\"\n");
         sb.append("gpu_3d_to_2d_texture = true\n");
         sb.append("black_edition = true\n");

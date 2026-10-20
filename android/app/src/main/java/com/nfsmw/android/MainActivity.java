@@ -444,6 +444,15 @@ public final class MainActivity extends Activity {
         });
         card.addView(spFilter);
 
+        // Game colour grade: the game's own final-composite filter (yellow tint, desaturation, vignette).
+        card.addView(heading("Game colour grade"));
+        card.addView(bodyText("The game's yellow tint, desaturation and vignette. Off removes the filter; Original is the Xbox 360 look.", 10.5f, TEXT_MUTED));
+        String curGrade = GameOptions.get(this, GameOptions.VISUAL_TREATMENT);
+        Spinner spGrade = createSpinner(new String[] {"Off (no yellow tint)", "Soft", "Original (Xbox 360)"},
+                "suave".equals(curGrade) ? 1 : ("original".equals(curGrade) ? 2 : 0),
+                pos -> GameOptions.set(this, GameOptions.VISUAL_TREATMENT, pos == 1 ? "suave" : (pos == 2 ? "original" : "apagado")));
+        card.addView(spGrade);
+
         return card;
     }
 
