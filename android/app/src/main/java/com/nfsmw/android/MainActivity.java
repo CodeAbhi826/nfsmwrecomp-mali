@@ -274,12 +274,6 @@ public final class MainActivity extends Activity {
                 ctrl.getBoolean("stretch", true),
                 (btn, on) -> ctrl.edit().putBoolean("stretch", on).apply()));
 
-        card.addView(switchRow("Widescreen (no squash)",
-                "Render at the phone's real aspect ratio so the field of view widens instead of the 16:9 "
-                        + "image being stretched. Turn it off to keep the original frame, stretched.",
-                ctrl.getBoolean("widescreen", true),
-                (btn, on) -> ctrl.edit().putBoolean("widescreen", on).apply()));
-
         card.addView(switchRow("Show Live FPS HUD",
                 "Displays real-time in-game FPS and frame delivery timing in the top-left corner.",
                 ctrl.getBoolean("show_fps", false),

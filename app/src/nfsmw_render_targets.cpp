@@ -112,6 +112,7 @@ REXCVAR_DECLARE(std::string, nfsmw_resolucion_interna);
 
 // Widescreen: the phone's real aspect ratio expressed as a height at 1280 px wide. The Android launcher works
 // it out from the panel before the game starts (592 for a 19.5:9 screen, for example) and passes it here.
+// On Android this is always on; there is no user-facing switch.
 //
 // This is the same idea as the PC widescreen fixes: the vertical field of view stays and the horizontal one
 // grows with the aspect, so the wider screen shows more of the world instead of squeezing a 16:9 image into
@@ -120,8 +121,8 @@ REXCVAR_DECLARE(std::string, nfsmw_resolucion_interna);
 // size, which is why this goes through the same latch as 1080p. 0 = off (16:9, 1280x720).
 REXCVAR_DEFINE_INT32(nfsmw_pantalla_alto, 0, "Graficos",
                      "Widescreen: visible height at 1280 px wide (0 = off). The Android launcher fills it in "
-                     "from the panel's aspect ratio; the game's logical screen, projection, HUD and render "
-                     "targets use it, so the image fills the screen without being squashed")
+                     "automatically from the panel's aspect ratio (always on); the game's logical screen, "
+                     "projection, HUD and render targets use it, so the image fills the screen without being squashed")
     .range(0, 720)
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
