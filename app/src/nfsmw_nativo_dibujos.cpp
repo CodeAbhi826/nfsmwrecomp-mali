@@ -5473,7 +5473,7 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     InformeEnlaces();  // texture bind thread, every 10 s
     InformeHuellas();  // texture hash thread, every 10 s
     InformeReutilizar();  // measurement only: new textures with a live one's content, every 10 s
-    InformeEtc2();  // ETC2 block cache: hits, misses and what each cost, every 10 s
+    ReportBlockCache();  // block cache: hits, misses and what each cost, every 10 s
     ExpulsarTexturasSiHaceFalta();
     pool_texturas_.PorFotograma(fotograma_);  // grows with headroom, never exactly on demand
     // Test nfsmw_nativo_constantes_ubo_alternar_s. Switched here because the new epoch forces all constants
@@ -5627,13 +5627,14 @@ class DibujosVulkanImpl final : public DibujosVulkan {
   }
 
   /*
-   * Every 10 s: what the ETC2 block cache is actually doing. On a first run every texture is a miss and the
-   * line shows the CPU encoding rate; on a later run almost everything is a hit and it shows the disk read
-   * rate, which is the run-to-run win. The file is the only thing that survives a restart, so this is the
-   * line to watch to know whether the cache is filling and being used.
+   * Every 10 s: what the block cache (ETC2 or ASTC) is actually doing. On a first run every texture is a
+   * miss and the line shows the CPU encoding rate; on a later run almost everything is a hit and it shows
+   * the disk read rate, which is the run-to-run win. The file is the only thing that survives a restart, so
+   * this is the line to watch to know whether the cache is filling and being used.
    */
-  void InformeEtc2() {
-    if (!etc2_) return;
+  void ReportBlockCache() {
+    const bool astc = astc_side_ != 0;
+    if (!etc2_ && !astc) return;
     const auto ahora = std::chrono::steady_clock::now();
     if (ahora - informe_etc2_ < std::chrono::seconds(10)) return;
     informe_etc2_ = ahora;
@@ -5641,10 +5642,11 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     const auto velocidad = [](uint64_t bytes, uint64_t ns) {
       return ns ? double(bytes) * 1e9 / double(ns) / 1048576.0 : 0.0;
     };
-    REXLOG_INFO("[nativo] C3: ETC2 en 10 s: {} aciertos ({:.1f} MB, {:.1f} ms, {:.1f} MB/s) y {} codificadas "
-                "({:.1f} MB, {:.1f} ms, {:.1f} MB/s); desde el arranque {} / {}; el fichero lleva {} texturas "
-                "y {} MB",
-                etc2_aciertos_ - etc2_aciertos_informe_,
+    const nfsmw::etc2::CacheTexturas& cache = astc ? cache_astc_ : cache_etc2_;
+    REXLOG_INFO("[nativo] C3: {} in 10 s: {} hits ({:.1f} MB, {:.1f} ms, {:.1f} MB/s) and {} encoded "
+                "({:.1f} MB, {:.1f} ms, {:.1f} MB/s); since start {} / {}; the file holds {} textures "
+                "and {} MB",
+                astc ? "ASTC" : "ETC2", etc2_aciertos_ - etc2_aciertos_informe_,
                 double(etc2_bytes_acierto_ - etc2_bytes_acierto_informe_) / 1048576.0,
                 double(etc2_ns_acierto_ - etc2_ns_acierto_informe_) / 1e6,
                 velocidad(etc2_bytes_acierto_ - etc2_bytes_acierto_informe_,
@@ -5654,7 +5656,7 @@ class DibujosVulkanImpl final : public DibujosVulkan {
                 double(etc2_ns_fallo_ - etc2_ns_fallo_informe_) / 1e6,
                 velocidad(etc2_bytes_fallo_ - etc2_bytes_fallo_informe_,
                           etc2_ns_fallo_ - etc2_ns_fallo_informe_),
-                etc2_aciertos_, etc2_fallos_, cache_etc2_.Entradas(), cache_etc2_.Tamano() >> 20);
+                etc2_aciertos_, etc2_fallos_, cache.Entradas(), cache.Tamano() >> 20);
     etc2_aciertos_informe_ = etc2_aciertos_;
     etc2_fallos_informe_ = etc2_fallos_;
     etc2_ns_acierto_informe_ = etc2_ns_acierto_;
