@@ -124,6 +124,13 @@ set(NFSMW_SOURCES
     src/nfsmw_ajustes_graficos.cpp
     # Profile dump of the instrumented build for PGO (NFSMW_PGO=generar; empty otherwise).
     src/nfsmw_pgo.cpp
+    # etcpak (BSD-3-Clause, src/thirdparty/etcpak): the ETC2/EAC encoder for the BC textures that a driver
+    # without BC support, like Mali's, has to decode on the CPU. See src/nfsmw_texturas_etc2.h and the cvar
+    # nfsmw_nativo_texturas_etc2. Only the files the RGB/EAC paths need are vendored.
+    src/thirdparty/etcpak/ProcessRGB.cpp
+    src/thirdparty/etcpak/Tables.cpp
+    src/thirdparty/etcpak/ColorSpace.cpp
+    src/thirdparty/etcpak/Dither.cpp
 )
 
 if(ANDROID)
