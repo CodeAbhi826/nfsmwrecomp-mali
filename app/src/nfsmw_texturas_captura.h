@@ -37,6 +37,7 @@
 
 #include "nfsmw_texturas_bc.h"
 #include "nfsmw_texturas_etc2.h"
+#include "nfsmw_texturas_astc.h"
 
 namespace nfsmw::captura_texturas {
 
@@ -203,83 +204,156 @@ class CapturaTexturas {
   std::unordered_set<uint64_t> claves_;
 };
 
-struct ResultadoConversion {
-  uint64_t convertidas = 0;  // encoded and stored in the block cache now
-  uint64_t saltadas = 0;     // already in the block cache
-  uint64_t fallidas = 0;     // could not be decoded/encoded/stored
-  uint64_t bytes = 0;        // source BC bytes read from the capture
+struct ConversionResult {
+  uint64_t converted = 0;  // encoded and stored in the block cache now
+  uint64_t skipped = 0;    // already in the block cache
+  uint64_t failed = 0;     // could not be decoded/encoded/stored
+  uint64_t bytes = 0;      // source BC bytes read from the capture
   double ms = 0;
 };
 
-// Reads `ruta`, and for every record not already in `cache` decodes the BC blocks and encodes them to ETC2.
-// `progreso(leidas, resultado)` is called every 128 records; pass a no-op lambda when the caller does not
-// care. It does not touch the capture file (the caller decides whether to truncate it) and needs no GPU.
-template <typename Progreso>
-ResultadoConversion ConvertirCaptura(const std::string& ruta, nfsmw::etc2::CacheTexturas& cache,
-                                     Progreso&& progreso) {
-  ResultadoConversion resultado;
-  const auto inicio = std::chrono::steady_clock::now();
-  FILE* fichero = std::fopen(ruta.c_str(), "rb");
-  if (!fichero) return resultado;
-  uint32_t cabecera[2] = {};
-  if (std::fread(cabecera, sizeof(cabecera), 1, fichero) != 1 || cabecera[0] != kMagiaFichero ||
-      cabecera[1] != kVersionFichero) {
-    std::fclose(fichero);
-    return resultado;
+// Walks the capture once. The policy decides everything that changes between targets:
+//
+//   uint64_t CacheKey(capture_key, width, height, layers, levels, bc_index)
+//   uint32_t Side(width, height, layers, levels, bc_index)          // 0 for ETC2
+//   bool Convert(side, rgba, src_offsets, width, height, layers, levels, blocks, dst_offsets)
+//
+// Keyed by the capture key so that the texture path and this walker always agree: ETC2 uses it as is, ASTC
+// mixes in the block side (4x4 and 6x6 payloads of the same texture are different bytes). `progress(read,
+// result)` is called every 128 records; pass a no-op lambda when the caller does not care. It does not touch
+// the capture file (the caller decides whether to truncate it) and needs no GPU.
+template <typename Policy, typename Progress>
+ConversionResult ConvertCaptureWith(const std::string& path, nfsmw::etc2::CacheTexturas& cache, Policy&& policy,
+                                    Progress&& progress) {
+  ConversionResult result;
+  const auto start = std::chrono::steady_clock::now();
+  FILE* file = std::fopen(path.c_str(), "rb");
+  if (!file) return result;
+  uint32_t header[2] = {};
+  if (std::fread(header, sizeof(header), 1, file) != 1 || header[0] != kMagiaFichero ||
+      header[1] != kVersionFichero) {
+    std::fclose(file);
+    return result;
   }
-  std::vector<uint8_t> datos, rgba, bloques;
-  std::vector<uint32_t> rasguno;
-  std::array<uint32_t, 16> desplazamientos{};
-  std::array<uint32_t, 16> desplazamientos_etc2{};
-  uint64_t leidas = 0;
+  std::vector<uint8_t> data, rgba, blocks;
+  std::array<uint32_t, 16> src_offsets{};
+  std::array<uint32_t, 16> dst_offsets{};
+  uint64_t read = 0;
   while (true) {
-    uint8_t registro[kCabeceraRegistro];
-    if (std::fread(registro, sizeof(registro), 1, fichero) != 1) break;
-    uint64_t clave = 0;
-    uint32_t bytes = 0, ancho = 0, alto = 0, capas = 0;
-    std::memcpy(&clave, registro, sizeof(clave));
-    std::memcpy(&bytes, registro + 8, sizeof(bytes));
-    std::memcpy(&ancho, registro + 12, sizeof(ancho));
-    std::memcpy(&alto, registro + 16, sizeof(alto));
-    std::memcpy(&capas, registro + 20, sizeof(capas));
-    const uint32_t niveles = registro[24];
-    const uint8_t indice_bc = registro[25];
-    if (bytes == 0 || bytes > (uint64_t(1) << 30) || ancho == 0 || alto == 0 || capas == 0 || niveles == 0 ||
-        niveles > 16 || indice_bc < 1 || indice_bc > 3) {
+    uint8_t record[kCabeceraRegistro];
+    if (std::fread(record, sizeof(record), 1, file) != 1) break;
+    uint64_t capture_key = 0;
+    uint32_t bytes = 0, width = 0, height = 0, layers = 0;
+    std::memcpy(&capture_key, record, sizeof(capture_key));
+    std::memcpy(&bytes, record + 8, sizeof(bytes));
+    std::memcpy(&width, record + 12, sizeof(width));
+    std::memcpy(&height, record + 16, sizeof(height));
+    std::memcpy(&layers, record + 20, sizeof(layers));
+    const uint32_t levels = record[24];
+    const uint8_t bc_index = record[25];
+    if (bytes == 0 || bytes > (uint64_t(1) << 30) || width == 0 || height == 0 || layers == 0 || levels == 0 ||
+        levels > 16 || bc_index < 1 || bc_index > 3) {
       break;  // corrupt record: stop, the rest cannot be trusted either
     }
-    datos.resize(bytes);
-    if (std::fread(datos.data(), 1, bytes, fichero) != bytes) break;
-    ++leidas;
-    if ((leidas & 127) == 0) progreso(leidas, resultado);
-    if (cache.Buscar(clave)) {
-      ++resultado.saltadas;
+    data.resize(bytes);
+    if (std::fread(data.data(), 1, bytes, file) != bytes) break;
+    ++read;
+    if ((read & 127) == 0) progress(read, result);
+    const uint64_t cache_key = policy.CacheKey(capture_key, width, height, layers, levels, bc_index);
+    if (cache.Buscar(cache_key)) {
+      ++result.skipped;
       continue;
     }
-    uint32_t bytes_etc2 = 0;
-    const bool disposicion_ok = nfsmw::etc2::Disposicion(ancho, alto, capas, niveles, false, desplazamientos_etc2,
-                                                         bytes_etc2);
-    if (!disposicion_ok || !nfsmw::bc::Convertir(nfsmw::bc::Formato(indice_bc), datos, ancho, alto, capas,
-                                                 niveles, rgba, desplazamientos)) {
-      ++resultado.fallidas;
+    if (!nfsmw::bc::Convertir(nfsmw::bc::Formato(bc_index), data, width, height, layers, levels, rgba,
+                              src_offsets)) {
+      ++result.failed;
       continue;
     }
-    bloques.assign(bytes_etc2, 0);
-    for (uint32_t n = 0; n < niveles; ++n) {
-      nfsmw::etc2::CodificarNivelRgba(rgba, desplazamientos[n], std::max(ancho >> n, 1u),
-                                      std::max(alto >> n, 1u), capas, false, rasguno,
-                                      bloques.data() + desplazamientos_etc2[n]);
+    const uint32_t side = policy.Side(width, height, layers, levels, bc_index);
+    if (!policy.Convert(side, rgba, src_offsets, width, height, layers, levels, blocks, dst_offsets)) {
+      ++result.failed;
+      continue;
     }
-    if (cache.Guardar(clave, indice_bc, bloques) || cache.Buscar(clave)) {
-      ++resultado.convertidas;
-      resultado.bytes += bytes;
+    if (cache.Guardar(cache_key, bc_index, blocks) || cache.Buscar(cache_key)) {
+      ++result.converted;
+      result.bytes += bytes;
     } else {
-      ++resultado.fallidas;
+      ++result.failed;
     }
   }
-  std::fclose(fichero);
-  resultado.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - inicio).count();
-  return resultado;
+  std::fclose(file);
+  result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+  return result;
 }
+
+// ETC2: the cache key is the capture key, and the blocks are produced exactly as the texture path does.
+struct Etc2Policy {
+  mutable std::vector<uint32_t> scratch;
+
+  uint64_t CacheKey(uint64_t capture_key, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) const {
+    return capture_key;
+  }
+  uint32_t Side(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) const { return 0; }
+  bool Convert(uint32_t, const std::vector<uint8_t>& rgba, const std::array<uint32_t, 16>& src, uint32_t width,
+               uint32_t height, uint32_t layers, uint32_t levels, std::vector<uint8_t>& output,
+               std::array<uint32_t, 16>& dst) const {
+    uint32_t bytes = 0;
+    if (!nfsmw::etc2::Disposicion(width, height, layers, levels, false, dst, bytes)) return false;
+    output.assign(bytes, 0);
+    for (uint32_t n = 0; n < levels; ++n) {
+      nfsmw::etc2::CodificarNivelRgba(rgba, src[n], std::max(width >> n, 1u), std::max(height >> n, 1u), layers,
+                                      false, scratch, output.data() + dst[n]);
+    }
+    return true;
+  }
+};
+
+// ASTC: two encoders at most (4x4 for the detail textures, `base` for the rest). `encoder_4` and
+// `encoder_base` may be the same object when base == 4.
+struct AstcPolicy {
+  uint32_t base = 6;
+  bool mixed = true;
+  nfsmw::astc::Encoder* encoder_4 = nullptr;
+  nfsmw::astc::Encoder* encoder_base = nullptr;
+
+  uint32_t Side(uint32_t width, uint32_t height, uint32_t layers, uint32_t levels, uint32_t bc_index) const {
+    return nfsmw::astc::ChosenSide(base, mixed, width, height, layers, levels, bc_index);
+  }
+  uint64_t CacheKey(uint64_t capture_key, uint32_t width, uint32_t height, uint32_t layers, uint32_t levels,
+                    uint32_t bc_index) const {
+    return nfsmw::astc::CacheKey(capture_key, Side(width, height, layers, levels, bc_index));
+  }
+  bool Convert(uint32_t side, const std::vector<uint8_t>& rgba, const std::array<uint32_t, 16>& src,
+               uint32_t width, uint32_t height, uint32_t layers, uint32_t levels, std::vector<uint8_t>& output,
+               std::array<uint32_t, 16>& dst) const {
+    nfsmw::astc::Encoder* encoder = side == 4 ? encoder_4 : encoder_base;
+    if (!encoder || !encoder->Valid()) return false;
+    uint32_t bytes = 0;
+    if (!nfsmw::astc::Layout(width, height, layers, levels, encoder->BlockX(), encoder->BlockY(), dst, bytes)) {
+      return false;
+    }
+    output.assign(bytes, 0);
+    for (uint32_t n = 0; n < levels; ++n) {
+      if (!encoder->Encode(rgba.data() + src[n], std::max(width >> n, 1u), std::max(height >> n, 1u), layers,
+                           output.data() + dst[n])) {
+        return false;
+      }
+    }
+    return true;
+  }
+};
+
+template <typename Progress>
+ConversionResult ConvertCapture(const std::string& path, nfsmw::etc2::CacheTexturas& cache,
+                                Progress&& progress) {
+  return ConvertCaptureWith(path, cache, Etc2Policy{}, std::forward<Progress>(progress));
+}
+
+template <typename Progress>
+ConversionResult ConvertCaptureAstc(const std::string& path, nfsmw::etc2::CacheTexturas& cache,
+                                    const AstcPolicy& policy, Progress&& progress) {
+  return ConvertCaptureWith(path, cache, policy, std::forward<Progress>(progress));
+}
+
 
 }  // namespace nfsmw::captura_texturas

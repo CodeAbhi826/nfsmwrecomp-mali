@@ -35,6 +35,7 @@
 #if REX_PLATFORM_ANDROID
 // android/app/src/main/cpp/android_rendimiento.cpp
 extern "C" void nfsmw_android_nucleos_grandes_aplicar();
+extern "C" void nfsmw_android_hilo_nucleos_grandes();
 #endif
 
 class NfsmwApp : public rex::ReXApp {

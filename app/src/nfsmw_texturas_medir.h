@@ -139,20 +139,20 @@ inline std::vector<Resultado> Conversiones(uint32_t lado, uint32_t repeticiones)
   // --- ASTC (astcenc, fastest preset) ---------------------------------------------------------
   for (const uint32_t bloque : {4u, 6u, 8u}) {
     const auto inicio_creacion = std::chrono::steady_clock::now();
-    nfsmw::astc::Codificador codificador(bloque, bloque);
+    nfsmw::astc::Encoder codificador(bloque, bloque);
     const double ms_creacion = Milisegundos(inicio_creacion);
     const std::string nota = "contexto " + std::to_string(int(ms_creacion + 0.5)) + " ms";
-    if (!codificador.Valido()) {
+    if (!codificador.Valid()) {
       resultados.push_back({"ASTC " + std::to_string(bloque) + "x" + std::to_string(bloque), 0, 0,
                             "no disponible"});
       continue;
     }
     std::vector<uint8_t> bloques(
-        size_t(nfsmw::astc::BytesPorNivel(lado, lado, 1, bloque, bloque)));
+        size_t(nfsmw::astc::LevelBytes(lado, lado, 1, bloque, bloque)));
     const auto inicio = std::chrono::steady_clock::now();
     bool bien = true;
     for (uint32_t r = 0; r < repeticiones && bien; ++r) {
-      bien = codificador.Codificar(imagen.data(), lado, lado, 1, bloques.data());
+      bien = codificador.Encode(imagen.data(), lado, lado, 1, bloques.data());
     }
     const double ms = Milisegundos(inicio) / repeticiones;
     resultados.push_back({"ASTC " + std::to_string(bloque) + "x" + std::to_string(bloque) +
