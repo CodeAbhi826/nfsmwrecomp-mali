@@ -2231,8 +2231,11 @@ class DestinosVulkan final : public DestinosNativos, public ContextoDestinos {
     auto entrada_llamada = antes_refresco;
     auto salida_llamada = antes_refresco;
     bool llamada = false;
+    // The display aspect is the guest output's own aspect, not always 16:9: with nfsmw_pantalla_alto the front
+    // buffer is wider than 16:9, and the presenter has to fill the surface with it instead of fitting it into a
+    // 16:9 box (which would stretch the wide image back vertically).
     presentador->RefreshGuestOutput(
-        w, h, 1280, 720, [&](rex::ui::Presenter::GuestOutputRefreshContext& base_contexto) {
+        w, h, w, h, [&](rex::ui::Presenter::GuestOutputRefreshContext& base_contexto) {
           entrada_llamada = std::chrono::steady_clock::now();
           llamada = true;
           auto& contexto =
