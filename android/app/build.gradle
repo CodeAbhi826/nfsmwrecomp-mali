@@ -8,6 +8,8 @@ android {
 
 
     def releaseKeystore = System.getenv("NFSMW_KEYSTORE")
+    def envVersionCode = System.getenv("NFSMW_VERSION_CODE")
+    def envVersionName = System.getenv("NFSMW_VERSION_NAME")
 
     signingConfigs {
         release {
@@ -24,8 +26,8 @@ android {
         applicationId 'io.github.nfsmwrecomp'
         minSdk 26
         targetSdk 35
-        versionCode (System.getenv("NFSMW_VERSION_CODE") ?: "100").toInteger()
-        versionName System.getenv("NFSMW_VERSION_NAME") ?: "1.0.0-mali"
+        versionCode(envVersionCode ? envVersionCode.toInteger() : 100)
+        versionName(envVersionName ?: "1.0.0-mali")
         ndk {
             abiFilters 'arm64-v8a'
         }
