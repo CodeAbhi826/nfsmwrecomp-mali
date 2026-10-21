@@ -148,4 +148,5 @@ This is an educational, non-commercial fan project developed solely for technica
 - **Need for Speed** and **Need for Speed: Most Wanted** are registered trademarks of Electronic Arts Inc.
 - **Xbox 360** is a registered trademark of Microsoft Corporation.
 - No proprietary game assets, copyrighted disc binaries (`default.xex`), or commercial media files are contained in this repository. Users must supply their own legally acquired game files.
+- A build is tied to the disc it was translated from: it contains that disc's game code in native form and only runs alongside that edition's files. Without your own copy of the game, nothing here runs.
 - The project is licensed under the [GNU General Public License v3.0](LICENSE).

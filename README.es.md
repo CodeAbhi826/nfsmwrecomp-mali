@@ -110,4 +110,4 @@ El APK Release se genera en `android/app/build/outputs/apk/release/app-release.a
 - `app/`, `sdk/`: aplicación recompilada y ReXGlue.
 - `docs/`: notas del port y compilación.
 
-Los archivos del juego y el código generado desde `default.xex` se mantienen fuera de Git. Consulta [`LICENSE`](LICENSE) y [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Proyecto de aficionados, sin afiliación con Electronic Arts; «Need for Speed» es una marca de Electronic Arts Inc.
+Los archivos del juego y el código generado desde `default.xex` se mantienen fuera de Git. Cada compilación va atada al disco del que se tradujo: lleva el código de ese disco en forma nativa y solo funciona con los archivos de esa edición; sin una copia propia del juego no se ejecuta nada. Consulta [`LICENSE`](LICENSE) y [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Proyecto de aficionados, sin afiliación con Electronic Arts; «Need for Speed» es una marca de Electronic Arts Inc.
