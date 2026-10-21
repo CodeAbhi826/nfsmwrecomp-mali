@@ -132,6 +132,13 @@ bool ReXApp::SetupEnvironment() {
   std::string user_data_cvar = REXCVAR_GET(user_data_root);
   if (!user_data_cvar.empty()) {
     user_dir = user_data_cvar;
+#if REX_PLATFORM_ANDROID
+  } else if (const char* app_folder = std::getenv("REX_APP_FOLDER"); app_folder && *app_folder) {
+    // The Java side sets this before starting the SDL thread. GetUserFolder() on Android resolves
+    // HOME to /data and builds /data/.local/share, which is not writable: losing the cvar (seen
+    // intermittently when the activity is started straight from adb) used to abort setup.
+    user_dir = app_folder;
+#endif
   } else {
     user_dir = rex::filesystem::GetUserFolder() / GetName();
   }

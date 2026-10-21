@@ -1,4 +1,9 @@
-name: Android ARM64 (Malicomp)
+name: Android shell (arm64)
+
+# Public CI builds the launcher shell only: no engine libraries, no translated game code and no
+# artifacts. The runnable APK needs the game's own executable, so it is built in the private
+# builder and published from there as a release. Keeping this workflow asset-free means nothing
+# downloadable here contains anything but our own source.
 
 on:
   push:
@@ -22,27 +27,8 @@ jobs:
         run: |
           python3 tools/check_app_spec.py
 
-      - name: Fetch Precompiled Native Core Libraries
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          mkdir -p build_output/base_apk
-          gh release download v0.5.2 --repo victorgbd/NFSMW-Recompiled-Mobile --pattern "*.apk" --dir build_output/base_apk
-          unzip -j build_output/base_apk/*.apk "lib/arm64-v8a/*" -d android/app/src/main/jniLibs/arm64-v8a/
-          ls -la android/app/src/main/jniLibs/arm64-v8a/
-
-      - name: Patch Mali native-renderer gate (runtimeDescriptorArray check)
-        run: |
-          python3 tools/patch_mali_native_gate.py android/app/src/main/jniLibs/arm64-v8a --require
-
-      - name: Build ARM64 Debug APK
+      - name: Build launcher shell
         working-directory: android
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: malicomp-android-arm64-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk

@@ -129,7 +129,16 @@ LogConfig g_config;
 
 std::filesystem::path NextSequentialLogPath(const std::filesystem::path& logs_dir,
                                             std::string_view app_name) {
-  std::filesystem::create_directories(logs_dir);
+  // Never throw here: an unwritable folder (on Android, the XDG fallback under /data when the
+  // user folder is missing) used to abort the process at startup instead of starting without a
+  // log file. The logcat sink still receives everything at info and above.
+  {
+    std::error_code ec;
+    std::filesystem::create_directories(logs_dir, ec);
+    if (ec || !std::filesystem::is_directory(logs_dir, ec)) {
+      return {};
+    }
+  }
 
   int max_seq = 0;
   std::string prefix = std::string(app_name) + "_";

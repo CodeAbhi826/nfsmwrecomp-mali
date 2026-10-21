@@ -235,6 +235,14 @@ final class GameOptions {
             args.add("--grant_user_privileges=true");
         }
         GpuDrivers.arguments(context, args);
+        // Audio. The XMA kick used to arrive on the game's audio server thread, which then decoded
+        // inline in 99% of the cases (mode 2: the worker only won 41 of 10,507 contexts), costing
+        // 22% of a core with peaks of 10.4 ms against a 5.3 ms block: that is the crackle heard in
+        // races. Mode 1 leaves the decoding to the XMA worker and returns from the kick at once.
+        args.add("--audio_xma_en_trabajador=1");
+        // 12 frames = 64 ms of reserve, less than one 70 ms frame: a slow frame drained it and SDL
+        // played silence (40 blocks per 10 s measured). 24 = 128 ms absorbs two frames.
+        args.add("--audio_sdl_bomba_cola=24");
         return args;
     }
 
