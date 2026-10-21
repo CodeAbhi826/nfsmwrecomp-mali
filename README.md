@@ -1,30 +1,30 @@
 <div align="center">
 
-# Malicomp
+# NFSMW Recompiled
 
 **Need for Speed: Most Wanted (2005) Native Port for ARM64 & Mali GPUs**
 
 Native APK · Vulkan 1.1+ · Mali Bifrost & Valhall Support · Ahead-Of-Time Asset Pipelines
 
-[![Android ARM64 (Malicomp)](https://github.com/CodeAbhi826/Malicomp/actions/workflows/android.yml/badge.svg)](https://github.com/CodeAbhi826/Malicomp/actions/workflows/android.yml)
+[![Android ARM64](https://github.com/CodeAbhi826/nfsmwrecomp-mali/actions/workflows/android.yml/badge.svg)](https://github.com/CodeAbhi826/nfsmwrecomp-mali/actions/workflows/android.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL_3.0-blue.svg)](LICENSE)
 [![AI Assisted](https://img.shields.io/badge/Research-AI--Assisted-informational.svg)](THIRD_PARTY_NOTICES.md#ai-assistance--research-disclosure)
 
 </div>
 
-**Malicomp** is an independent, 100% native Android port and recompilation of *Need for Speed: Most Wanted (2005)*. Built upon the architectural foundations of [codepdbh/nfsmw-android](https://github.com/codepdbh/nfsmw-android), [nfsmw-nx](https://github.com/StevensND/nfsmw-nx), and the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk), Malicomp focuses specifically on hardware-level compatibility, zero-copy Vulkan rendering, and Ahead-Of-Time (AOT) asset optimization for ARM Mali GPUs (Bifrost & Valhall) as well as modern Adreno and Xclipse platforms.
+**NFSMW Recompiled** is an independent, 100% native Android port and recompilation of *Need for Speed: Most Wanted (2005)*. Built upon the architectural foundations of [codepdbh/nfsmw-android](https://github.com/codepdbh/nfsmw-android), [nfsmw-nx](https://github.com/StevensND/nfsmw-nx), and the [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk), the project focuses specifically on hardware-level compatibility, zero-copy Vulkan rendering, and Ahead-Of-Time (AOT) asset optimization for ARM Mali GPUs (Bifrost & Valhall) as well as modern Adreno and Xclipse platforms.
 
 ---
 
 ## Key Features & Architectural Enhancements
 
 ### 1. Native Mali Bifrost Support
-Older Mali GPUs (such as Mali-G71, G72, and G76 found in popular Exynos and MediaTek chipsets) feature a hardware limit of 4 bound descriptor sets and lack desktop descriptor indexing extensions. Malicomp addresses this natively:
+Older Mali GPUs (such as Mali-G71, G72, and G76 found in popular Exynos and MediaTek chipsets) feature a hardware limit of 4 bound descriptor sets and lack desktop descriptor indexing extensions. NFSMW Recompiled addresses this natively:
 - **Aspect-Ratio & Area Render Target Filter (`app/src/nfsmw_nativo_destinos.cpp`)**: Dynamically resolves guest frontbuffer addresses to the primary wide-aspect render target, eliminating the "Swap sin textura resuelta" black-screen stall without requiring guest memory hacks.
 - **2D UI Quad Descriptor Stream Latched Rebinds (`app/src/nfsmw_nativo_dibujos.cpp`)**: Re-latches descriptor set bindings across 2D/3D quad transitions on 4-set architectures. This completely resolves the font atlas sampling bug where text glyph sheets were mistakenly sampled onto UI banners, logos, and HUD elements.
 
 ### 2. Ahead-Of-Time (AOT) Native Asset Pipelines (`tools/aot/`)
-Emulating Xbox 360 texture and media formats in real-time places severe strain on mobile memory bandwidth and low-power CPU cores. Malicomp includes dedicated AOT tools to pre-compile game assets into native mobile formats:
+Emulating Xbox 360 texture and media formats in real-time places severe strain on mobile memory bandwidth and low-power CPU cores. NFSMW Recompiled includes dedicated AOT tools to pre-compile game assets into native mobile formats:
 - **Hardware ASTC 4×4 Texture Compression (`tools/aot/transcode_astc.py`)**:
   Transcodes BC1–BC5 textures into hardware ASTC (Adaptive Scalable Texture Compression) blocks supported natively in Mali silicon. Cuts texture memory bandwidth consumption by ~75% (from 4.19 MB uncompressed RGBA8 per 1024×1024 down to 1.05 MB) and eliminates runtime CPU NEON decompression.
 - **Hardware H.264/AAC Cutscene Playback (`tools/aot/transcode_movies.py`)**:
@@ -55,7 +55,7 @@ All visual enhancements remain fully operational:
 
 ## Installation & First Launch
 
-1. **Get the APK:** Download the latest build from [Releases](https://github.com/CodeAbhi826/Malicomp/releases) or build it using GitHub Actions.
+1. **Get the APK:** Download the latest build from [Releases](https://github.com/CodeAbhi826/nfsmwrecomp-mali/releases) or build it using GitHub Actions.
 2. **Grant Permissions:** Install the APK and open the launcher. Grant **All files access** (Manage External Storage) when prompted.
 3. **Copy Game Files:** Copy your extracted game assets directly into `Internal storage/nsfmw-androidevolved/`:
    ```text
@@ -133,7 +133,7 @@ Alternatively, push commits directly to your fork to trigger the automated [GitH
 
 ## Credits & Upstream Attribution
 
-Malicomp is made possible by the dedicated work of the reverse engineering and emulation communities:
+NFSMW Recompiled is made possible by the dedicated work of the reverse engineering and emulation communities:
 - [codepdbh/nfsmw-android](https://github.com/codepdbh/nfsmw-android): Android launcher, SDL3 integration, and native Vulkan pipeline foundations.
 - [StevensND/nfsmw-nx](https://github.com/StevensND/nfsmw-nx): The original console recompilation project.
 - [madelrandel-blip/NFSMW-Recompiled](https://github.com/madelrandel-blip/NFSMW-Recompiled): Initial game function mapping and decompilation hooks.

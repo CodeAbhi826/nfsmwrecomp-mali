@@ -3977,7 +3977,7 @@ class DibujosVulkanImpl final : public DibujosVulkan {
       pipeline_enlazado_ = pipeline;
       clave_enlazada_valida_ = false;  // the counter does not classify this bind
     }
-    // PARCHE LOCAL (NFSMW Recompiled / Malicomp): Rebind descriptor sets whenever sets are not yet bound,
+    // PARCHE LOCAL (NFSMW Recompiled): Rebind descriptor sets whenever sets are not yet bound,
     // or on 4-descriptor set architectures (Mali Bifrost) to prevent descriptor stream desynchronization on 2D quads.
     if (!sets_enlazados_ || cuatro_conjuntos_) {
       NFSMW_SUB(1, dfn_.vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_pipeline_, 0,

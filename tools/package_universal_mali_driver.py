@@ -19,7 +19,7 @@ META_DATA = {
     "schemaVersion": 1,
     "name": "MaliCompat Universal Vulkan Driver",
     "description": "Universal Vulkan Compatibility & Descriptor Indexing Shim for ARM Mali GPUs (Bifrost & Valhall)",
-    "author": "CodeAbhi826 / Malicomp",
+    "author": "CodeAbhi826 / NFSMW Recompiled",
     "packageVersion": "1.0.0",
     "vendor": "ARM Mali / MaliCompat",
     "driverVersion": "1.0.0-universal",

@@ -16,8 +16,8 @@ import javax.net.ssl.HttpsURLConnection;
 
 /** Optional official GitHub updates. No APK is installed or downloaded in the background. */
 final class ReleaseUpdates {
-    private static final String REPO = "https://github.com/CodeAbhi826/Malicomp/";
-    private static final String API = "https://api.github.com/repos/CodeAbhi826/Malicomp/releases/latest";
+    private static final String REPO = "https://github.com/CodeAbhi826/nfsmwrecomp-mali/";
+    private static final String API = "https://api.github.com/repos/CodeAbhi826/nfsmwrecomp-mali/releases/latest";
     static final class Result {
         final String tag, url, error;
         Result(String tag, String url, String error) { this.tag = tag; this.url = url; this.error = error; }

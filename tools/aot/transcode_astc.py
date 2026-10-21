@@ -38,7 +38,7 @@ def compress_astc(input_file: Path, output_file: Path, block_size: str = "4x4", 
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="AOT ASTC Texture Compressor for Mali GPUs (Malicomp)")
+    parser = argparse.ArgumentParser(description="AOT ASTC Texture Compressor for Mali GPUs (NFSMW Recompiled)")
     parser.add_argument("input_dir", help="Directory containing source textures")
     parser.add_argument("output_dir", help="Directory to save compressed .astc textures")
     parser.add_argument("--block", default="4x4", choices=["4x4", "5x5", "6x6", "8x8"], help="ASTC block footprint (default: 4x4)")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tools/aot/transcode_movies.py - Ahead-Of-Time (AOT) Video Transcoder for Malicomp / Android
+tools/aot/transcode_movies.py - Ahead-Of-Time (AOT) Video Transcoder for NFSMW Recompiled / Android
 
 Converts legacy Xbox 360 WMV3 cutscenes and intro movies into hardware-accelerated H.264/AAC MP4 files.
 Android AMediaCodec decodes MP4 directly on the hardware VPU at 60 FPS with 0% CPU overhead,
@@ -43,7 +43,7 @@ def transcode_video(input_path: Path, output_path: Path, crf: int = 20) -> bool:
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="AOT Video Transcoder for NFSMW Android (Malicomp)")
+    parser = argparse.ArgumentParser(description="AOT Video Transcoder for NFSMW Android (NFSMW Recompiled)")
     parser.add_argument("movies_dir", help="Path to the 'Movies' directory containing .wmv files")
     parser.add_argument("--output_dir", "-o", help="Optional output directory (defaults to replacing or alongside)")
     parser.add_argument("--crf", type=int, default=20, help="H.264 CRF quality level (default: 20)")

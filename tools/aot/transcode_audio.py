@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tools/aot/transcode_audio.py - Ahead-Of-Time (AOT) Audio Transcoding Pipeline for Malicomp / Android
+tools/aot/transcode_audio.py - Ahead-Of-Time (AOT) Audio Transcoding Pipeline for NFSMW Recompiled / Android
 
 Converts Xbox 360 audio streams and sound assets to native Ogg Vorbis or Opus.
 Streaming native audio via AAudio completely bypasses on-the-fly software XMA decoding (sub_825FDDB8),
@@ -35,7 +35,7 @@ def transcode_audio_file(input_file: Path, output_file: Path, codec: str = "libv
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="AOT Audio Transcoder for Android Native Audio (Malicomp)")
+    parser = argparse.ArgumentParser(description="AOT Audio Transcoder for Android Native Audio (NFSMW Recompiled)")
     parser.add_argument("input_dir", help="Directory containing raw audio files")
     parser.add_argument("output_dir", help="Directory to save transcoded audio files")
     parser.add_argument("--format", default="ogg", choices=["ogg", "opus"], help="Output audio container (default: ogg)")
