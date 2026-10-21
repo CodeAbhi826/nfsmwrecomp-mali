@@ -88,10 +88,10 @@ final class GameOptions {
                     new String[] {"1280x720", "960x540", "854x480"},
                     new String[] {"720p (1280x720 - Native Xbox 360)", "540p (960x540 - Performance Mode)", "480p (854x480 - Performance)"},
                     new String[] {"720p", "540p", "480p"}),
-            new Option(FPS, "Target Framerate Cap", "nfsmw_limite_fps", "60",
-                    new String[] {"60", "30"},
-                    new String[] {"60 FPS (Smooth)", "30 FPS (Battery Saver)"},
-                    new String[] {"60 FPS", "30 FPS"}),
+            new Option(FPS, "Target Framerate Cap", "nfsmw_limite_fps", "30",
+                    new String[] {"30", "60"},
+                    new String[] {"30 FPS (Default - frame budget the port targets)", "60 FPS (Only on fast GPUs)"},
+                    new String[] {"30 FPS", "60 FPS"}),
             new Option(AA, "Anti-Aliasing", "nfsmw_antialiasing", "apagado",
                     new String[] {"apagado", "fxaa"},
                     new String[] {"Disabled (none)", "FXAA"},
@@ -147,10 +147,12 @@ final class GameOptions {
                     new String[] {"100", "125", "150", "200"},
                     new String[] {"Normal (100%)", "High (125%)", "Very high (150%)", "Maximum (200%)"},
                     new String[] {"100%", "125%", "150%", "200%"}),
-            new Option("audio_buffer", "Audio Buffer Latency", "audio_sdl_bomba_cola", "12",
-                    new String[] {"12", "20"},
-                    new String[] {"Normal (64 ms)", "Large (107 ms, if crackling)"},
-                    new String[] {"64 ms", "107 ms"}),
+            // 24 blocks = 128 ms of reserve. 12 (64 ms) is less than one slow frame: the queue drained
+            // and SDL played silence (40 blocks per 10 s measured). 24 absorbs two 60 ms frames.
+            new Option("audio_buffer", "Audio Buffer Latency", "audio_sdl_bomba_cola", "24",
+                    new String[] {"24", "40"},
+                    new String[] {"128 ms (Recommended)", "213 ms (Extra safety, adds latency)"},
+                    new String[] {"128 ms", "213 ms"}),
             new Option("language", "In-Game Language", "nfsmw_idioma", "0",
                     new String[] {"0", "-1", "4", "1", "2", "3", "5", "6", "7", "12", "13"},
                     new String[] {"English (Default)", "Game Edition Default", "Español", "Français", "Deutsch", "Italiano",
@@ -240,9 +242,6 @@ final class GameOptions {
         // 22% of a core with peaks of 10.4 ms against a 5.3 ms block: that is the crackle heard in
         // races. Mode 1 leaves the decoding to the XMA worker and returns from the kick at once.
         args.add("--audio_xma_en_trabajador=1");
-        // 12 frames = 64 ms of reserve, less than one 70 ms frame: a slow frame drained it and SDL
-        // played silence (40 blocks per 10 s measured). 24 = 128 ms absorbs two frames.
-        args.add("--audio_sdl_bomba_cola=24");
         return args;
     }
 
