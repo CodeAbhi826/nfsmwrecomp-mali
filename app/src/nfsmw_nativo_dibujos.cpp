@@ -72,8 +72,9 @@ static const uint32_t kSpirvResplandorSuave[1] = {0};
 #include <rex/thread.h>
 
 #if REX_PLATFORM_ANDROID
-// android/app/src/main/cpp/android_rendimiento.cpp: pins the calling thread to the performance cores
-// (nfsmw_android_nucleos_grandes). Called by the threads that do the heavy work, not by all of them.
+// android/app/src/main/cpp/android_rendimiento.cpp: in "all" mode, pins the calling thread to the
+// performance cores (nfsmw_android_nucleos_grandes). In the default "auto" mode the name-based watchdog
+// already covers these threads, so the call is a no-op. Called by the threads that do the heavy work.
 extern "C" void nfsmw_android_hilo_nucleos_grandes();
 #define NFSMW_HILO_NUCLEOS_GRANDES() nfsmw_android_hilo_nucleos_grandes()
 #else

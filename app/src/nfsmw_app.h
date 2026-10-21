@@ -234,7 +234,7 @@ class NfsmwApp : public rex::ReXApp {
   // ==========================================================================
   void OnPostInitLogging() override {
 #if REX_PLATFORM_ANDROID
-    // Before any game thread exists: they inherit the mask (nfsmw_android_nucleos_grandes).
+    // Before any game thread exists: starts the affinity rules (nfsmw_android_afinidad, default "auto").
     nfsmw_android_nucleos_grandes_aplicar();
 #endif
     // Mesa/NVK environment variables (nfsmw_mesa_entorno): the toml has already been read and Vulkan is
