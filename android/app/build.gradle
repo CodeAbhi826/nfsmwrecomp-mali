@@ -7,12 +7,25 @@ android {
     compileSdk 35
 
 
+    def releaseKeystore = System.getenv("NFSMW_KEYSTORE")
+
+    signingConfigs {
+        release {
+            if (releaseKeystore) {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv("NFSMW_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("NFSMW_KEY_ALIAS") ?: "nfsmw"
+                keyPassword System.getenv("NFSMW_KEY_PASSWORD") ?: System.getenv("NFSMW_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId 'io.github.nfsmwrecomp'
         minSdk 26
         targetSdk 35
-        versionCode 100
-        versionName '1.0.0-mali'
+        versionCode (System.getenv("NFSMW_VERSION_CODE") ?: "100").toInteger()
+        versionName System.getenv("NFSMW_VERSION_NAME") ?: "1.0.0-mali"
         ndk {
             abiFilters 'arm64-v8a'
         }
@@ -29,7 +42,10 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            // One key for every release: Android only installs an update over the same signature, and
+            // a new one means uninstalling, which wipes the converted game data and the texture cache.
+            // Without the keystore (local shell builds) it falls back to the debug key.
+            signingConfig releaseKeystore ? signingConfigs.release : signingConfigs.debug
             // AGP builds release natives as RelWithDebInfo (-O2 -g); the game wants the SDK's Release
             // flags (-O3, no asserts) and ThinLTO (src/main/cpp/CMakeLists.txt).
             externalNativeBuild {

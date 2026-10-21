@@ -17,12 +17,14 @@
 // nfsmw_android_afinidad selects what is pinned (default "auto"):
 //
 //   "auto"  A watchdog re-reads /proc/self/task every 2 s and applies name-based rules. The preparer
-//           (SDLThread), the ring (GPU anillo nativo), the Xenos command processor (GPU Commands) and the
-//           main guest thread (Main XThread) stay on the performance cluster; everything else goes to the
-//           other cores so it cannot steal a performance core from the frame. If the other cluster is less
-//           than 60 % of the fastest (a 2+6 SoC such as the Snapdragon 695), only those critical threads
-//           are pinned and the rest is left free: forcing audio or shader compilation onto cores that slow
-//           is worse than the contention it avoids.
+//           (SDLThread), the ring (GPU anillo nativo), the Xenos command processor (GPU Commands), the
+//           main guest thread (Main XThread) and the XMA decoder stay on the performance cluster;
+//           everything else goes to the other cores so it cannot steal a performance core from the
+//           frame. The XMA decoder is there because the audio fix moves every decode to it and it has to
+//           finish inside the 5.3 ms audio block. If the other cluster is less than 60 % of the fastest
+//           (a 2+6 SoC such as the Snapdragon 695), only the critical threads are pinned and the rest is
+//           left free: forcing audio or shader compilation onto cores that slow is worse than the
+//           contention it avoids.
 //   "all"   The old one-shot mode: every existing thread moves to the performance cluster and the threads
 //           created later inherit that mask. Kept as the A/B control.
 //   ""      No affinity changes (same as nfsmw_android_nucleos_grandes=false).
@@ -278,7 +280,9 @@ std::vector<Rule> AutoRules(const CoreInfo& info) {
     // SDLThread is this port's preparer: the thread that builds the draw list and runs the guest frame work,
     // ~92 % of a core at the lobby. The upstream rules do not name it because there the second cluster is
     // nearly as fast; here it is the heaviest thread, so it must stay on a performance core.
-    for (const char* name : {"SDLThread", "GPU Commands", "GPU anillo", "Main XThread"}) {
+    // "XMA Decoder" joins them because the audio fix (audio_xma_en_trabajador=1) moves every decode there:
+    // it has to wake and finish inside the 5.3 ms audio block, and on the little cluster it cannot.
+    for (const char* name : {"SDLThread", "GPU Commands", "GPU anillo", "Main XThread", "XMA Decoder"}) {
       rules.push_back(MakeRule(name, prime));
     }
   } else {
@@ -288,6 +292,7 @@ std::vector<Rule> AutoRules(const CoreInfo& info) {
     rules.push_back(MakeRule("GPU anillo", middle));
     rules.push_back(MakeRule("Main XThread", prime));
     rules.push_back(MakeRule("SDLThread", prime));
+    rules.push_back(MakeRule("XMA Decoder", middle));
   }
   if (few_big) {
     REXLOG_INFO("[affinity] auto: {} performance cores and the next cluster below 60 %; only the critical "

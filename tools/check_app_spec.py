@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-build checkpoint validator for Malicomp Android application.
+Pre-build checkpoint validator for the NFSMW Recompiled Android application.
 Ensures application specifications, UI constraints, and architecture rules are strictly met:
 1. Locked portrait orientation in AndroidManifest.xml.
 2. Verified SDL JNI method signature (void nativeSetupJNI()).
@@ -103,7 +103,7 @@ def check_assets():
 
 def main():
     print("=" * 60)
-    print("Running Malicomp Pre-Build Architecture & Spec Checkpoint...")
+    print("Running NFSMW Recompiled Pre-Build Architecture & Spec Checkpoint...")
     print("=" * 60)
 
     checks = [
