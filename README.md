@@ -55,7 +55,7 @@ All visual enhancements remain fully operational:
 
 ## Installation & First Launch
 
-1. **Get the APK:** Download the latest build from [Releases](https://github.com/CodeAbhi826/nfsmwrecomp-mali/releases) or build it using GitHub Actions.
+1. **Get the APK:** Download the latest build from [Releases](https://github.com/CodeAbhi826/nfsmwrecomp-mali/releases).
 2. **Grant Permissions:** Install the APK and open the launcher. Grant **All files access** (Manage External Storage) when prompted.
 3. **Copy Game Files:** Copy your extracted game assets directly into `Internal storage/nsfmw-androidevolved/`:
    ```text
@@ -127,7 +127,10 @@ cd android
 ```
 The compiled APK will be located at `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-Alternatively, push commits directly to your fork to trigger the automated [GitHub Actions CI build](.github/workflows/android.yml).
+The automated [GitHub Actions workflow](.github/workflows/android.yml) compiles the launcher shell only: it checks the native interfaces
+and the Java build, but it does not contain the recompiled game code or the engine libraries, so its APK cannot start the game.
+Playable APKs are published from a build of the recompiled executable and are available under
+[Releases](https://github.com/CodeAbhi826/nfsmwrecomp-mali/releases).
 
 ---
 
