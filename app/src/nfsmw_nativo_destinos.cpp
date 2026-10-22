@@ -5365,6 +5365,37 @@ class DestinosVulkan final : public DestinosNativos, public ContextoDestinos {
     return true;
   }
 
+  // Approximate bytes of a render target, for the memory report. Upper bound: the driver may pad the tiled
+  // layout, and after a zero-copy resolve the resolved image can be the same VkImage as its target, so the
+  // three buckets can overlap.
+  static uint64_t BytesDeImagen(const Imagen& imagen) {
+    if (imagen.imagen == VK_NULL_HANDLE || !imagen.ancho || !imagen.alto) {
+      return 0;
+    }
+    uint64_t bpp = 4;
+    switch (imagen.formato) {
+      case VK_FORMAT_R8_UNORM:
+        bpp = 1;
+        break;
+      case VK_FORMAT_R8G8_UNORM:
+      case VK_FORMAT_D16_UNORM:
+        bpp = 2;
+        break;
+      case VK_FORMAT_R16G16B16A16_SFLOAT:
+      case VK_FORMAT_R16G16B16A16_UNORM:
+      case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        bpp = 8;
+        break;
+      case VK_FORMAT_R32G32B32A32_SFLOAT:
+        bpp = 16;
+        break;
+      default:
+        bpp = 4;
+        break;
+    }
+    return uint64_t(imagen.ancho) * imagen.alto * bpp;
+  }
+
   // Rear-view mirror diagnostic: for each resolved texture, how many copies there are and how many had
   // draws since the previous copy (the car's cubemap faces are 256x256). A face resolved without draws
   // copies again what the render target already had.
@@ -5411,6 +5442,23 @@ class DestinosVulkan final : public DestinosNativos, public ContextoDestinos {
     }
     copias_por_destino_.clear();
     NFSMW_INFORME_ANILLO("[nativo] C2 caras resueltas desde el informe anterior:{}", lista);
+    {
+      uint64_t bytes_color = 0, bytes_prof = 0, bytes_res = 0;
+      for (const auto& [clave, imagen] : destinos_) {
+        bytes_color += BytesDeImagen(imagen);
+      }
+      for (const auto& [clave, imagen] : profundidades_) {
+        bytes_prof += BytesDeImagen(imagen);
+      }
+      for (const auto& [clave, resuelta] : resueltas_) {
+        bytes_res += BytesDeImagen(resuelta.imagen);
+      }
+      NFSMW_INFORME_ANILLO("[nativo] C2 memoria de destinos: {} colores ({} MB), {} profundidades ({} MB), "
+                           "{} resueltas ({} MB); suma bruta {} MB (las resueltas pueden compartir imagen con "
+                           "su destino)",
+                           destinos_.size(), bytes_color >> 20, profundidades_.size(), bytes_prof >> 20,
+                           resueltas_.size(), bytes_res >> 20, (bytes_color + bytes_prof + bytes_res) >> 20);
+    }
     if (intercambios_ || restauraciones_) {
       // Restores are the verdict. If they go up, the swap without a clear saves nothing: the same copy is
       // paid, just later.

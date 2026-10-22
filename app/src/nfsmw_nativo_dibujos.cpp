@@ -421,9 +421,10 @@ REXCVAR_DEFINE_BOOL(nfsmw_nativo_texturas_bc_cpu, false, "NFSMW",
  * now: they would become EAC R11/R11G11, also 2x smaller, but the encoder reads a single channel from byte 2
  * and that needs the BC decode to write its channel there first.
  *
- * Off by default: it is A/B tested against the RGBA8 path.
+ * On by default: on Mali it cuts the converted texture cache 4x (1 byte/pixel instead of RGBA8's 4) and the
+ * init turns it off by itself on devices that can sample BC natively. It can still be A/B tested with false.
  */
-REXCVAR_DEFINE_BOOL(nfsmw_nativo_texturas_etc2, false, "NFSMW",
+REXCVAR_DEFINE_BOOL(nfsmw_nativo_texturas_etc2, true, "NFSMW",
                     "Renderizador nativo: guarda las texturas BC1-3 como ETC2 (4x menos memoria y ancho de "
                     "banda en Mali), con una cache en disco que crece jugando")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
@@ -479,10 +480,13 @@ REXCVAR_DEFINE_INT32(nfsmw_nativo_texturas_astc_calidad, 0, "NFSMW",
  *
  * It only writes when the CPU is decoding BC anyway, so it costs a file copy and nothing else. The capture
  * is game data: it stays in the app's private cache directory and is truncated as soon as it is converted.
+ * Off by default: it is only needed while building the ETC2 cache, and during normal play it writes
+ * hundreds of MB into the race (measured: 159 MB in one session) and competes with the streaming reads.
  */
-REXCVAR_DEFINE_BOOL(nfsmw_nativo_texturas_capturar, true, "NFSMW",
+REXCVAR_DEFINE_BOOL(nfsmw_nativo_texturas_capturar, false, "NFSMW",
                     "Renderizador nativo: guarda los bytes BC de las texturas para convertirlas a ETC2 en el "
-                    "siguiente arranque, fuera del juego (asi entrar a una zona no codifica nada)")
+                    "siguiente arranque, fuera del juego (asi entrar a una zona no codifica nada). Solo para "
+                    "llenar la cache; en juego normal se deja apagado")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 /*
@@ -537,7 +541,10 @@ REXCVAR_DEFINE_BOOL(nfsmw_nativo_mipmaps, true, "NFSMW",
 #if REX_PLATFORM_SWITCH
 constexpr int32_t kTexturasMbMaxPorDefecto = 512;
 #else
-constexpr int32_t kTexturasMbMaxPorDefecto = 384;
+// Android/Mali: ETC2 makes the converted cache 4x smaller than RGBA8, so 160 MB holds a working set that
+// used to need 600+ MB. The app's nfsmw.toml sets 96 for the phone; this is the safe default for a new
+// install. The old 384 was chosen for RGBA8 and is what pushed the process into lmkd territory.
+constexpr int32_t kTexturasMbMaxPorDefecto = 160;
 #endif
 REXCVAR_DEFINE_INT32(nfsmw_nativo_texturas_mb_max, kTexturasMbMaxPorDefecto, "NFSMW",
                      "Renderizador nativo: MB de texturas a partir de los que se sueltan las que llevan mas tiempo sin "
@@ -1259,7 +1266,11 @@ constexpr uint32_t kCapacidadMonton[4] = {256, 16, 64, 128};  // 2D, 3D, cubo, s
 // Work slots. The ones actually used are chosen by nfsmw_nativo_ranuras_trabajo; this is the room reserved
 // for them, and it has to match the array in nfsmw_nativo_destinos.cpp.
 constexpr size_t kRanurasDeTrabajo = 3;
-constexpr VkDeviceSize kTamanoSubida = VkDeviceSize(64) << 20;
+// 48 MB instead of 64. The 64 MB ring never filled in a race (C6 reported "envios por subida llena 0"),
+// and every MB of it is host-visible memory counted in the app's RSS. 48 leaves room for the largest
+// single texture upload (a 2048 mip chain is ~21 MB, a 1024 cubemap ~32 MB) without the regression risk of
+// 32.
+constexpr VkDeviceSize kTamanoSubida = VkDeviceSize(48) << 20;
 // Separate buffer for the shared constants, per slot. ~1,400 draws x 512 bytes = 0.7 MB per frame; if it
 // fills up, the work is submitted just as with the upload buffer.
 constexpr VkDeviceSize kTamanoCompartidas = VkDeviceSize(4) << 20;  // per work slot (there are three)
@@ -5620,6 +5631,44 @@ class DibujosVulkanImpl final : public DibujosVulkan {
     REXLOG_INFO("[nativo] C3 memoria de la GPU: {}{}; la cache de texturas lleva {} MB de {} MB", texto,
                 hay_presupuesto ? "" : " (sin VK_EXT_memory_budget: solo tamanos)", bytes_texturas_ >> 20,
                 texturas_mb_max_);
+    // What the texture cache is made of, by host format. This is the line that proves whether ETC2 covers
+    // everything: if a large RGBA8 bucket survives, some format is still falling back and we can chase it.
+    {
+      uint64_t bytes_etc2 = 0, bytes_astc = 0, bytes_rgba8 = 0, bytes_r8 = 0, bytes_bc = 0, bytes_otros = 0;
+      uint32_t n_etc2 = 0, n_astc = 0, n_rgba8 = 0, n_r8 = 0, n_bc = 0, n_otros = 0;
+      for (const auto& [clave, textura] : texturas_) {
+        const VkFormat f = textura.imagen.formato;
+        uint64_t* bytes = &bytes_otros;
+        uint32_t* cuenta = &n_otros;
+        if (f >= VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK && f <= VK_FORMAT_EAC_R11G11_SNORM_BLOCK) {
+          bytes = &bytes_etc2;
+          cuenta = &n_etc2;
+        } else if (f >= VK_FORMAT_ASTC_4x4_UNORM_BLOCK && f <= VK_FORMAT_ASTC_12x12_SRGB_BLOCK) {
+          bytes = &bytes_astc;
+          cuenta = &n_astc;
+        } else if (f >= VK_FORMAT_BC1_RGBA_UNORM_BLOCK && f <= VK_FORMAT_BC7_SRGB_BLOCK) {
+          bytes = &bytes_bc;
+          cuenta = &n_bc;
+        } else if (f == VK_FORMAT_R8_UNORM || f == VK_FORMAT_R8_SNORM || f == VK_FORMAT_R8_USCALED ||
+                   f == VK_FORMAT_R8_SSCALED || f == VK_FORMAT_R8G8_UNORM || f == VK_FORMAT_R8G8_SNORM ||
+                   f == VK_FORMAT_R8G8_USCALED || f == VK_FORMAT_R8G8_SSCALED) {
+          bytes = &bytes_r8;
+          cuenta = &n_r8;
+        } else if (f == VK_FORMAT_R8G8B8A8_UNORM || f == VK_FORMAT_R8G8B8A8_SRGB ||
+                   f == VK_FORMAT_B8G8R8A8_UNORM || f == VK_FORMAT_B8G8R8A8_SRGB ||
+                   f == VK_FORMAT_A8B8G8R8_UNORM_PACK32 || f == VK_FORMAT_A8B8G8R8_SRGB_PACK32) {
+          bytes = &bytes_rgba8;
+          cuenta = &n_rgba8;
+        }
+        *bytes += textura.bytes;
+        ++*cuenta;
+      }
+      REXLOG_INFO("[nativo] C3 texturas por formato: {} ({} MB); ETC2/EAC {} ({} MB), ASTC {} ({} MB), "
+                  "RGBA8 {} ({} MB), R8/R8G8 {} ({} MB), BC {} ({} MB), otras {} ({} MB)",
+                  texturas_.size(), bytes_texturas_ >> 20, n_etc2, bytes_etc2 >> 20, n_astc, bytes_astc >> 20,
+                  n_rgba8, bytes_rgba8 >> 20, n_r8, bytes_r8 >> 20, n_bc, bytes_bc >> 20, n_otros,
+                  bytes_otros >> 20);
+    }
     // Without this line there is no way to know whether the pool is working or fragmenting. A vegetation
     // counter once existed and was never printed.
     if (pool_texturas_.Activo()) {
