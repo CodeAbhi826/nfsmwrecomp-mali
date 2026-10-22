@@ -50,6 +50,7 @@
 #include <rex/hook.h>
 #include <rex/logging.h>
 #include "nfsmw_nativo_ganchos.h"
+#include "nfsmw_ritmo.h"
 #if defined(NFSMW_NATIVE_SHADER_LIBRARY)
 #include "nfsmw_video_bridge.h"
 #endif
@@ -748,6 +749,7 @@ REX_HOOK_RAW(sub_825989D8) {  // Swap: marks the end of each frame
   }
   __imp__sub_825989D8(ctx, base);
   g_nfsmw_fotogramas_juego.fetch_add(1, std::memory_order_relaxed);
+  nfsmw::ritmo::RegistrarSwap();
   if (on) {
     Leave(kSwap, ctx);
     g_frames.fetch_add(1, std::memory_order_relaxed);

@@ -66,6 +66,7 @@ public final class GameActivity extends SDLActivity
     private SensorManager sensorManager;
     private Sensor gravity;
     private TextView textoFps;
+    private int pantallaHz = 60;
     private final Handler reloj = new Handler(Looper.getMainLooper());
     private Runnable actualizarFps;
 
@@ -123,6 +124,25 @@ public final class GameActivity extends SDLActivity
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
     }
 
+    // The lowest display mode that still shows every frame the game makes.
+    private Display.Mode mejorModo(int fps) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return null;
+        }
+        Display display = getWindowManager().getDefaultDisplay();
+        Display.Mode best = null;
+        for (Display.Mode mode : display.getSupportedModes()) {
+            if (mode.getPhysicalWidth() != display.getMode().getPhysicalWidth()) {
+                continue;
+            }
+            if (mode.getRefreshRate() + 0.5f >= fps &&
+                    (best == null || mode.getRefreshRate() < best.getRefreshRate())) {
+                best = mode;
+            }
+        }
+        return best;
+    }
+
     // The image and the controls use all of the panel, camera cutout included, at its highest refresh rate
     // when the FPS limit asks for more than 60.
     private void useWholeScreen() {
@@ -131,22 +151,10 @@ public final class GameActivity extends SDLActivity
             attrs.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
         int fps = Integer.parseInt(GameOptions.get(this, GameOptions.FPS));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Display display = getWindowManager().getDefaultDisplay();
-            Display.Mode best = null;
-            for (Display.Mode mode : display.getSupportedModes()) {
-                if (mode.getPhysicalWidth() != display.getMode().getPhysicalWidth()) {
-                    continue;
-                }
-                // The lowest mode that still shows every frame the game makes.
-                if (mode.getRefreshRate() + 0.5f >= fps &&
-                        (best == null || mode.getRefreshRate() < best.getRefreshRate())) {
-                    best = mode;
-                }
-            }
-            if (best != null) {
-                attrs.preferredDisplayModeId = best.getModeId();
-            }
+        Display.Mode best = mejorModo(fps);
+        if (best != null) {
+            attrs.preferredDisplayModeId = best.getModeId();
+            pantallaHz = Math.round(best.getRefreshRate());
         }
         getWindow().setAttributes(attrs);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -228,9 +236,11 @@ public final class GameActivity extends SDLActivity
             public void run() {
                 float fps = -1.0f;
                 float ms = -1.0f;
+                String ritmo = "";
                 try {
                     fps = io.github.nfsmwrecomp.GameActivity.nativeFps();
                     ms = io.github.nfsmwrecomp.GameActivity.nativeMsPorFotograma();
+                    ritmo = io.github.nfsmwrecomp.GameActivity.nativeRitmo();
                 } catch (UnsatisfiedLinkError ignored) {
                 }
                 String str;
@@ -238,6 +248,9 @@ public final class GameActivity extends SDLActivity
                     str = "-- fps";
                 } else {
                     str = String.format(java.util.Locale.ROOT, "%.0f fps  %.1f ms", fps, ms);
+                    if (ritmo != null && !ritmo.isEmpty()) {
+                        str += "\n" + ritmo;
+                    }
                 }
                 if (!str.equals(ultimo)) {
                     if (textoFps != null) {
@@ -259,6 +272,10 @@ public final class GameActivity extends SDLActivity
         args.add("--cache_root=" + cacheRoot);
         // The launcher's graphics options win over nfsmw.toml.
         args.addAll(GameOptions.arguments(this));
+        // Refresh rate of the output mode, for the [ritmo] line. The compositor quantises presents to
+        // this period, and that is what decides whether the same average fps looks even or alternates.
+        Display.Mode salida = mejorModo(Integer.parseInt(GameOptions.get(this, GameOptions.FPS)));
+        args.add("--nfsmw_pantalla_hz=" + (salida != null ? Math.round(salida.getRefreshRate()) : pantallaHz));
         if (getSharedPreferences("nfsmw_controls", MODE_PRIVATE).getBoolean("stretch", true)) {
             args.add("--present_letterbox=false");
             args.add("--present_safe_area_x=100");

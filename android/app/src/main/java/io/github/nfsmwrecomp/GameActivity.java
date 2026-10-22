@@ -8,6 +8,7 @@ public final class GameActivity {
 
     public static native float nativeFps();
     public static native float nativeMsPorFotograma();
+    public static native String nativeRitmo();
 
     public static float tryGetFps() {
         try {
@@ -22,6 +23,15 @@ public final class GameActivity {
             return nativeMsPorFotograma();
         } catch (UnsatisfiedLinkError ignored) {
             return 0.0f;
+        }
+    }
+
+    public static String tryGetRitmo() {
+        try {
+            String linea = nativeRitmo();
+            return linea != null ? linea : "";
+        } catch (UnsatisfiedLinkError ignored) {
+            return "";
         }
     }
 }

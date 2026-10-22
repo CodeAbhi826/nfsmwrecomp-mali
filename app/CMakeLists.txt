@@ -97,6 +97,9 @@ set(NFSMW_SOURCES
     # PNG captures of the game image for testing (cvar
     # nfsmw_captura_cada_s, 0 = never).
     src/nfsmw_nativo_captura.cpp
+    # Frame rhythm, thermal and frequency telemetry: the [ritmo] line and the second line of the
+    # on-screen FPS counter (nfsmw_ritmo_cada_s, 10 s by default).
+    src/nfsmw_ritmo.cpp
     # Native renderer, part C2: render targets, copies (resolve and
     # clear) and presentation of the game image.
     src/nfsmw_nativo_destinos.cpp

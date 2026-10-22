@@ -62,3 +62,13 @@ Java_io_github_nfsmwrecomp_GameActivity_nativeMsPorFotograma(JNIEnv*, jclass) {
   // nativeFps() (called just before, from the same poll) updates the window and this value with it.
   return g_ms_por_fotograma;
 }
+
+// Second line of the HUD: p95/max of the last window, the two most common vblank multiples (the
+// cadence), the hottest thermal zone, the big-core frequency and the stutter count. Built by
+// nfsmw_ritmo.cpp (app/src), which records one interval per game frame from the Swap hook.
+extern "C" const char* nfsmw_ritmo_hud_line();
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_io_github_nfsmwrecomp_GameActivity_nativeRitmo(JNIEnv* env, jclass) {
+  return env->NewStringUTF(nfsmw_ritmo_hud_line());
+}
